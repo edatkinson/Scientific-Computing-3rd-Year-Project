@@ -36,7 +36,7 @@ def rk4_step(f,x0,t0,h):
     t1 = t0+h
     return x1,t1
 
-def dx_dt(t,x):
+def system_of_odes(t,x):
     dxdt = x[1]
     dydt = -x[0]
     return np.array([dxdt, dydt])
@@ -46,6 +46,12 @@ def true_solution(t):
 
 
 def solve_to(f,x0,t0,tf,h, method):
+    #:Params: f = function of system of ODEs
+    #:Params: x0 = array of initial conditions
+    #:Params: t0 = initial time 
+    #:Params: tf = finishing time
+    #:Params: h = step size
+    #:Params: method = euler or rk4
     N = int((tf-t0)/h)
     dim = len(x0)
     x = np.zeros((N+1,dim))
@@ -60,9 +66,24 @@ def solve_to(f,x0,t0,tf,h, method):
             raise ValueError("Invalid method. Use 'euler' or 'rk4'")
     return x,t
 
+#Plots x and y against t
+
+h = 1
+tf = 50
+t0 = 0
+x0 = [1,0]
+x, t = solve_to(system_of_odes,x0,t0,tf,h,method='rk4')
+
+# plt.plot(t,x[:,0],label='x')
+# plt.plot(t,x[:,1],label='y')
+
+dxdt = np.gradient(x[:, 0],t)
+dydt = np.gradient(x[:,1],t)
+
+plt.plot(dxdt,x[:,0])
+plt.show()
 
 
-print(solve_to(dx_dt,[1,0],0,3,0.1,method='euler'))
 
 
 '''
