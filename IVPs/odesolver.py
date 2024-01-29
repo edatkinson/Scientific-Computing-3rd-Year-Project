@@ -41,6 +41,10 @@ def system_of_odes(t,x):
     dydt = -x[0]
     return np.array([dxdt, dydt])
 
+def dx_dt(t,x):
+    dx_dt = x
+    return dx_dt
+
 def true_solution(t):
     return np.exp(t)
 
@@ -66,44 +70,20 @@ def solve_to(f,x0,t0,tf,h, method):
             raise ValueError("Invalid method. Use 'euler' or 'rk4'")
     return x,t
 
-#Plots x and y against t
-
-h = 0.5
-tf = 50
-t0 = 0
-x0 = [1,0]
-x, t = solve_to(system_of_odes,x0,t0,tf,h,method='euler')
-
-# plt.plot(t,x[:,0],label='x')
-# plt.plot(t,x[:,1],label='y')
-
-dxdt = np.gradient(x[:, 0],t)
-dydt = np.gradient(x[:,1],t)
-
-plt.plot(x[:,0],dxdt)
-plt.xlabel('Xdot')
-plt.ylabel('x')
-plt.show() 
-
-#x and xdot converges to 0
-#As you increase h and tf, a runtime overflow error occurs in the rk4 method
-
-
-
 '''
-
+#Finding Errors
 timestep_values = np.logspace(-6, -1, 20) #e-6 to e-1
 errors_euler = []
 errors_rk4 = []
 for h in timestep_values:
-    x,t = solve_to(dx_dt,1,0,3,h,method='euler')
+    x,t = solve_to(dx_dt,[1],0,3,h,method='euler')
     true_values = true_solution(t)
     error = np.abs(true_values - x)
     max_error = max(error)
     errors_euler.append(max_error)
 
 for h in timestep_values:
-    x,t = solve_to(dx_dt,1,0,3,h,method='rk4')
+    x,t = solve_to(dx_dt,[1],0,3,h,method='rk4')
     true_values = true_solution(t)
     error = np.abs(true_values - x)
     max_error = max(error)
@@ -115,8 +95,34 @@ plt.xlabel('Max Errors')
 plt.ylabel('Time Steps')
 plt.legend()
 plt.show()
-
 '''
+
+
+#Plots x and y against t
+
+h = 0.5
+tf = 50
+t0 = 0
+x0 = [1,0]
+x, t = solve_to(system_of_odes,x0,t0,tf,h,method='euler')
+
+plt.plot(t,x[:,0],label='x')
+plt.plot(t,x[:,1],label='y')
+
+dxdt = np.gradient(x[:, 0],t)
+dydt = np.gradient(x[:,1],t)
+
+plt.plot(x[:,0],dxdt)
+plt.plot(x[:,1],dydt)
+plt.xlabel('Xdot')
+plt.ylabel('x')
+#plt.savefig('Question3.jpeg')
+plt.show() 
+#x and xdot converges to 0
+#As you increase h and tf, a runtime overflow error occurs in the rk4 method
+#Using the euler method we can see a conversion to 0
+
+
 
 
 
