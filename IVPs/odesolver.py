@@ -17,6 +17,8 @@ k3 = f(t_old+h/2,x_old+h*(k2/2))
 k4 = f(t_old+h,x_old +h*k3)
 
 To solve second order ODEs, split the ODE into first order form then use vectors to hold the (x_old,y_old,t_old)variables
+so: 
+initial conditions x,y = [x0,y0]
 
 '''
 
@@ -35,8 +37,9 @@ def rk4_step(f,x0,t0,h):
     return x1,t1
 
 def dx_dt(t,x):
-    dx_dt = x
-    return dx_dt
+    dxdt = x[1]
+    dydt = -x[0]
+    return np.array([dxdt, dydt])
 
 def true_solution(t):
     return np.exp(t)
@@ -44,27 +47,27 @@ def true_solution(t):
 
 def solve_to(f,x0,t0,tf,h, method):
     N = int((tf-t0)/h)
-    #error = np.zeros(N+1)
-    x = np.zeros(N+1)
+    dim = len(x0)
+    x = np.zeros((N+1,dim))
     t = np.linspace(t0,tf,N+1)
-    #solution = x0*np.exp(t) 
     x[0] = x0
-    #solution[0] = x0
     for i in range(N):
         if method == 'euler':
             x[i+1],t[i+1] = euler_step(f, x[i], t[i], h)
-            #error[i] = abs(-solution[i]+x[i])
         elif method == 'rk4':
             x[i+1],t[i+1] = rk4_step(f, x[i], t[i], h)
-            #error[i] = abs(-solution[i] + x[i])
         else:
             raise ValueError("Invalid method. Use 'euler' or 'rk4'")
-    
-
-    return x,t #,error
+    return x,t
 
 
-timestep_values = np.logspace(-6, 1, 20) #e-6 to e-1
+
+print(solve_to(dx_dt,[1,0],0,3,0.1,method='euler'))
+
+
+'''
+
+timestep_values = np.logspace(-6, -1, 20) #e-6 to e-1
 errors_euler = []
 errors_rk4 = []
 for h in timestep_values:
@@ -88,7 +91,7 @@ plt.ylabel('Time Steps')
 plt.legend()
 plt.show()
 
-
+'''
 
 
 
