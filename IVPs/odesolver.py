@@ -68,11 +68,11 @@ def solve_to(f,x0,t0,tf,h, method):
 
 #Plots x and y against t
 
-h = 1
+h = 0.5
 tf = 50
 t0 = 0
 x0 = [1,0]
-x, t = solve_to(system_of_odes,x0,t0,tf,h,method='rk4')
+x, t = solve_to(system_of_odes,x0,t0,tf,h,method='euler')
 
 # plt.plot(t,x[:,0],label='x')
 # plt.plot(t,x[:,1],label='y')
@@ -80,9 +80,13 @@ x, t = solve_to(system_of_odes,x0,t0,tf,h,method='rk4')
 dxdt = np.gradient(x[:, 0],t)
 dydt = np.gradient(x[:,1],t)
 
-plt.plot(dxdt,x[:,0])
-plt.show()
+plt.plot(x[:,0],dxdt)
+plt.xlabel('Xdot')
+plt.ylabel('x')
+plt.show() 
 
+#x and xdot converges to 0
+#As you increase h and tf, a runtime overflow error occurs in the rk4 method
 
 
 
