@@ -64,16 +64,28 @@ def solve_to(f,x0,t0,tf,h, method):
     return x,t #,error
 
 
-timestep_values = np.logspace(-3, -1, 20)
-errors = []
+timestep_values = np.logspace(-6, 1, 20) #e-6 to e-1
+errors_euler = []
+errors_rk4 = []
+for h in timestep_values:
+    x,t = solve_to(dx_dt,1,0,3,h,method='euler')
+    true_values = true_solution(t)
+    error = np.abs(true_values - x)
+    max_error = max(error)
+    errors_euler.append(max_error)
+
 for h in timestep_values:
     x,t = solve_to(dx_dt,1,0,3,h,method='rk4')
     true_values = true_solution(t)
     error = np.abs(true_values - x)
     max_error = max(error)
-    errors.append(max_error)
+    errors_rk4.append(max_error)
 
-plt.loglog(timestep_values, errors, label='Error', marker='o')
+plt.loglog(timestep_values, errors_euler, label='euler', marker='o',color='red')
+plt.loglog(timestep_values,errors_rk4,label='rk4', marker='o')
+plt.xlabel('Max Errors')
+plt.ylabel('Time Steps')
+plt.legend()
 plt.show()
 
 
