@@ -38,24 +38,47 @@ def dx_dt(t,x):
     dx_dt = x
     return dx_dt
 
+def true_solution(t):
+    return np.exp(t)
+
 
 def solve_to(f,x0,t0,tf,h, method):
     N = int((tf-t0)/h)
+    #error = np.zeros(N+1)
     x = np.zeros(N+1)
     t = np.linspace(t0,tf,N+1)
+    #solution = x0*np.exp(t) 
     x[0] = x0
+    #solution[0] = x0
     for i in range(N):
         if method == 'euler':
             x[i+1],t[i+1] = euler_step(f, x[i], t[i], h)
+            #error[i] = abs(-solution[i]+x[i])
         elif method == 'rk4':
             x[i+1],t[i+1] = rk4_step(f, x[i], t[i], h)
+            #error[i] = abs(-solution[i] + x[i])
         else:
             raise ValueError("Invalid method. Use 'euler' or 'rk4'")
-
     
-    return x,t
+
+    return x,t #,error
+
+
+timestep_values = np.logspace(-3, -1, 20)
+errors = []
+for h in timestep_values:
+    x,t = solve_to(dx_dt,1,0,3,h,method='rk4')
+    true_values = true_solution(t)
+    error = np.abs(true_values - x)
+    max_error = max(error)
+    errors.append(max_error)
+
+plt.loglog(timestep_values, errors, label='Error', marker='o')
+plt.show()
 
 
 
 
-print(solve_to(dx_dt,1,0,3,0.1, method='rk4'))
+
+
+
