@@ -20,47 +20,42 @@ To solve second order ODEs, split the ODE into first order form then use vectors
 
 '''
 
-def euler_step(f,x,t,h):
-    x = x+ h*f(t,x)
-    return x
+def euler_step(f,x0,t0,h):
+    x1 = x0 + h*f(t0,x0)
+    t1 = t0+h
+    return x1,t1
 
-def rk4_step(f,x,t,h):
-    k1 = f(t,x)
-    k2 = f(t+h/2, x+h*(k1/2))
-    k3 = f(t+h/2,x+h*(k2/2))
-    k4 = f(t+h,x+h*k3)
-    x = x + h/6 * (k1 + 2*k2 + 2*k3 + k4)
-    return x
+def rk4_step(f,x0,t0,h):
+    k1 = f(t0,x0)
+    k2 = f(t0+h/2, x0+h*(k1/2))
+    k3 = f(t0+h/2,x0+h*(k2/2))
+    k4 = f(t0+h,x0+h*k3)
+    x1 = x0 + h/6 * (k1 + 2*k2 + 2*k3 + k4)
+    t1 = t0+h
+    return x1,t1
 
 def dx_dt(t,x):
     dx_dt = x
     return dx_dt
 
 
-t0 = 0
-x0 = 1
-tf = 2
-h = 0.1
+def solve_to(f,x0,t0,tf,h, method):
+    N = int((tf-t0)/h)
+    x = np.zeros(N+1)
+    t = np.linspace(t0,tf,N+1)
+    x[0] = x0
+    for i in range(N):
+        if method == 'euler':
+            x[i+1],t[i+1] = euler_step(f, x[i], t[i], h)
+        elif method == 'rk4':
+            x[i+1],t[i+1] = rk4_step(f, x[i], t[i], h)
+        else:
+            raise ValueError("Invalid method. Use 'euler' or 'rk4'")
 
-#time stepping
-t = t0
-x = x0
-
-t_list = []
-x_list = []
-while t < tf:
-    x = rk4_step(dx_dt, x, t, h)
-    t+=h
-    t_list.append(t)
     
-    x_list.append(x)
-
-plt.plot(t_list,x_list)
-plt.show()
+    return x,t
 
 
 
 
-
-
-
+print(solve_to(dx_dt,1,0,3,0.1, method='rk4'))
