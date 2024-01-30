@@ -36,6 +36,7 @@ def rk4_step(f,x0,t0,h):
     t1 = t0+h
     return x1,t1
 
+
 def system_of_odes(t,x):
     dxdt = x[1]
     dydt = -x[0]
@@ -70,6 +71,7 @@ def solve_to(f,x0,t0,tf,h, method):
             raise ValueError("Invalid method. Use 'euler' or 'rk4'")
     return x,t
 
+
 '''
 #Finding Errors
 timestep_values = np.logspace(-6, -1, 20) #e-6 to e-1
@@ -100,27 +102,27 @@ plt.show()
 
 #Plots x and y against t
 
-h = 0.5
-tf = 50
-t0 = 0
-x0 = [1,0]
-x, t = solve_to(system_of_odes,x0,t0,tf,h,method='euler')
+# h = 0.5
+# tf = 50
+# t0 = 0
+# x0 = [1,0]
+# x, t = solve_to(system_of_odes,x0,t0,tf,h,method='euler')
 
-plt.plot(t,x[:,0],label='x')
-plt.plot(t,x[:,1],label='y')
+# plt.plot(t,x[:,0],label='x')
+# plt.plot(t,x[:,1],label='y')
 
-dxdt = np.gradient(x[:, 0],t)
-dydt = np.gradient(x[:,1],t)
+# dxdt = np.gradient(x[:, 0],t)
+# dydt = np.gradient(x[:,1],t)
 
-plt.plot(x[:,0],dxdt)
-plt.plot(x[:,1],dydt)
-plt.xlabel('Xdot')
-plt.ylabel('x')
-#plt.savefig('Question3.jpeg')
-plt.show() 
-#x and xdot converges to 0
-#As you increase h and tf, a runtime overflow error occurs in the rk4 method
-#Using the euler method we can see a conversion to 0
+# plt.plot(x[:,0],dxdt)
+# plt.plot(x[:,1],dydt)
+# plt.xlabel('Xdot')
+# plt.ylabel('x')
+# #plt.savefig('Question3.jpeg')
+# plt.show() 
+# #x and xdot converges to 0
+# #As you increase h and tf, a runtime overflow error occurs in the rk4 method
+# #Using the euler method we can see it converging to 0
 
 
 
