@@ -1,8 +1,9 @@
 import numpy as np 
 import matplotlib.pyplot as plt 
-
+import sys
 
 def main(filename=None, filename2=None):
+    print(f"filename1: {filename}, filename2: {filename2}")
     t = np.linspace(0,20,100)
     x0 = np.array([1,0])
     x0_error = np.array([1])
@@ -13,7 +14,7 @@ def main(filename=None, filename2=None):
     else:
         fig.savefig(filename)
 
-    fig2 = plot_errors(dx_dt, true_solution, x0_error, t0=0, tf=2)
+    fig2 = plot_errors(dx_dt, true_solution, x0_error, t0=0, tf=10)
     if filename2 is None:
         plt.show()
     else:
@@ -131,17 +132,15 @@ def plot_errors(dx_dt, true_solution, x0, t0, tf):
     ax.set_ylabel('Error')
     ax.set_xlabel('Time Steps')
     ax.legend()
+    fig.savefig('error_plot.jpeg')
     return fig
 
 
 
+
 if __name__ == "__main__":
-    #
-    # If run as a command line script (rather than imported) then we call main
-    # passing the command line arguments.
-    #
     import sys
-    args = sys.argv[2:]
+    args = sys.argv[1:]
     main(*args)
 
 
