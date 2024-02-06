@@ -2,17 +2,23 @@ import numpy as np
 import matplotlib.pyplot as plt 
 
 
-
-
-def main(filename=None):
-    t = np.linspace(0,50,100)
+def main(filename=None, filename2=None):
+    t = np.linspace(0,20,100)
     x0 = np.array([1,0])
-    x, y, t = solve_ode(system_of_odes,x0,t,method='rk4',h=0.1)
-    fig = plot_solution(t,x,y)
+    x0_error = np.array([1])
+    x, t = solve_ode(system_of_odes,x0,t,method='rk4',h=0.1)
+    fig = plot_solution(t,x[:,0],x[:,1])
     if filename is None:
         plt.show()
     else:
         fig.savefig(filename)
+
+    fig2 = plot_errors(dx_dt, true_solution, x0_error, t0=0, tf=2)
+    if filename2 is None:
+        plt.show()
+    else:
+        fig2.savefig(filename2)
+
 
 def euler_step(f,x0,t0,h):
     x1 = x0 + h*f(t0,x0)
@@ -41,28 +47,7 @@ def true_solution(t):
     return np.exp(t)
 
 
-# def solve_to(f,x0,t0,tf,h, method):
-#     #:Params: f = function of system of ODEs
-#     #:Params: x0 = array of initial conditions
-#     #:Params: t0 = initial time 
-#     #:Params: tf = finishing time
-#     #:Params: h = step size or delta_max
-#     #:Params: method = euler or rk4
-#     N = int((tf-t0)/h)
-#     dim = len(x0)
-#     x = np.zeros((N+1,dim))
-#     t = np.linspace(t0,tf,N+1)
-#     x[0] = x0
-#     for i in range(N):
-#         if method == 'euler':
-#             x[i+1] = euler_step(f, x[i], t[i], h)
-#         elif method == 'rk4':
-#             x[i+1] = rk4_step(f, x[i], t[i], h)
-#         else:
-#             raise ValueError("Invalid method. Use 'euler' or 'rk4'")
-#     return x
-
-def solve_to(func, x0, t0, tf, h, method):
+def solve_to(func, x0, t0, tf, method, h=1):
     t = np.arange(t0, tf, h) #Create an array of times from t0 to tf
     sol = np.zeros((len(t), len(x0))) #Create an array to hold the solution
     sol[0] = x0 #Set the initial conditions
@@ -75,50 +60,21 @@ def solve_to(func, x0, t0, tf, h, method):
         else:
             raise ValueError("Invalid method. Use 'euler' or 'rk4'")
 
-    return sol[-1] #Return only the final state
+    return sol[-1], t[-1] #Return only the final state
 
 
-
-'''
-#Finding Errors
-timestep_values = np.logspace(-6, -1, 20) #e-6 to e-1
-errors_euler = []
-errors_rk4 = []
-for h in timestep_values:
-    x,t = solve_to(dx_dt,[1],0,3,h,method='euler')
-    true_values = true_solution(t)
-    error = np.abs(true_values[-1] - x[-1,0]) 
-    errors_euler.append(error)
-
-for h in timestep_values:
-    x,t = solve_to(dx_dt,[1],0,3,h,method='rk4')
-    true_values = true_solution(t)
-    error = np.abs(true_values[-1] - x[-1,0])
-    errors_rk4.append(error)
-
-plt.loglog(timestep_values, errors_euler, label='euler', marker='o',color='red')
-plt.loglog(timestep_values,errors_rk4,label='rk4', marker='o')
-plt.ylabel('Max Errors')
-plt.xlabel('Time Steps')
-plt.legend()
-plt.show()
-'''
-
-
-
-
-def solve_ode(func, x0, t, method='rk4', h=1):
+def solve_ode(func, x0, t, method, h):
    
     sol = np.zeros((len(t), len(x0))) #Create an array to hold the solution
     sol[0] = x0 #Set the initial conditions
     
     for i in range(len(t)-1):
-        sol[i+1] = solve_to(func, sol[i], t[i], t[i]+h, h, method) #Solve the ODE at each time step
+        sol[i+1], tf = solve_to(func, sol[i], t[i], t[i+1], method, h) #Solve the ODE at each time step
     
-    x_sol = sol[:, 0] #Extract the x values
-    y_sol = sol[:, 1] #Extract the y values
+    # x_sol = sol[:, 0] #Extract the x values
+    # y_sol = sol[:, 1] #Extract the y values
     t_sol = t #Extract the time values (array of times)
-    return  x_sol, y_sol, t_sol
+    return  sol, t_sol
 
 
 def plot_solution(t, x, v):
@@ -153,41 +109,42 @@ def plot_solution(t, x, v):
     return fig
 
 
-'''
+def plot_errors(dx_dt, true_solution, x0, t0, tf):
+    timestep_values = np.logspace(-6, -1, 10) #e-6 to e-1
+    errors_euler = []
+    errors_rk4 = []
+
+    for h in timestep_values:
+        x,t = solve_to(dx_dt,x0,t0,tf,method='euler',h=h)
+        true_values = true_solution(t)
+        error = np.abs(true_values - x[-1])
+        errors_euler.append(error)
+
+    for h in timestep_values:
+        x,t = solve_to(dx_dt,x0,t0,tf,method='rk4',h=h)
+        true_values = true_solution(t)
+        error = np.abs(true_values - x[-1])
+        errors_rk4.append(error)
+    fig, ax = plt.subplots()
+    ax.loglog(timestep_values,errors_euler, label='euler', marker='o',color='red')
+    ax.loglog(timestep_values,errors_rk4,label='rk4', marker='o')
+    ax.set_ylabel('Error')
+    ax.set_xlabel('Time Steps')
+    ax.legend()
+    return fig
+
+
+
 if __name__ == "__main__":
     #
     # If run as a command line script (rather than imported) then we call main
     # passing the command line arguments.
     #
     import sys
-    args = sys.argv[1:]
+    args = sys.argv[2:]
     main(*args)
-'''
 
 
-
-#Plots x and y against t
-
-h = 0.1
-t = np.linspace(0,50,100)
-x0 = np.array([1,0])
-x, y, t = solve_ode(system_of_odes,x0,t,method='rk4',h=h)
-
-plt.plot(t,x,label='x')
-plt.plot(t,y,label='y')
-
-# dxdt = np.gradient(x[:, 0],t)
-# dydt = np.gradient(x[:,1],t)
-
-# plt.plot(x[:,0],dxdt)
-# plt.plot(x[:,1],dydt)
-# plt.xlabel('Xdot')
-# plt.ylabel('x')
-#plt.savefig('Question3.jpeg')
-plt.show() 
-#x and xdot converges to 0
-#As you increase h and tf, a runtime overflow error occurs in the rk4 method
-#Using the euler method we can see it converging to 0
 
 
 
