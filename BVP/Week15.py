@@ -3,7 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt 
 from scipy.integrate import odeint
 from scipy.optimize import fsolve
-
+from scipy.integrate import solve_ivp
 #to Isolate a periodic orbit, 
 '''
 To find limit cycles, we must solve the periodic boundary value problem (BVP)
@@ -23,23 +23,26 @@ def lokta_volterra(x,beta,t=None):
     return np.array([dxdt,dydt])
 
 
-beta = 0.1  # or any other value beta is between 0.1 and 0.5
-t = np.linspace(0, 100, 500)  # time grid
-x0 = [0.1, 0.1]  # initial conditions
+beta_values = np.linspace(0.1, 0.5, 40)  # Explore beta in [0.1, 0.5]
+t = np.linspace(0, 100, 10000)  # Time grid
 
-sol = odeint(lokta_volterra, x0, t, args=(beta,)) #using the odeint from scipy lib
+# Initial condition range
+x0_range = [0.1, 0.5]
+y0_range = [0.1, 0.5]
+initial_conditions = np.linspace(x0_range[0], y0_range[1], 10)
 
-#Find the roots
-roots = fsolve(lokta_volterra, x0, args=(beta,))
-print('Roots:', roots)
-
-plt.plot(t, sol[:, 0], label='Prey')
-plt.plot(t, sol[:, 1], label='Predator')
-plt.legend()
-#plt.savefig('Beta = 0.1.png')
-plt.show()
-
-
-
+# Iterate over beta values and initial conditions
+for beta in beta_values:
+    plt.figure(figsize=(10, 8))
+    for x0 in initial_conditions:
+        for y0 in initial_conditions:
+            sol = odeint(lokta_volterra, [x0, y0], t, args=(beta,))
+            plt.plot(sol[:, 0], sol[:, 1], label=f'x0={x0:.2f}, y0={y0:.2f}')
+    
+    plt.xlabel('Prey')
+    plt.ylabel('Predator')
+    plt.title(f'Phase Portrait for beta={beta:.2f}')
+    plt.legend()
+    plt.show()
 
 
