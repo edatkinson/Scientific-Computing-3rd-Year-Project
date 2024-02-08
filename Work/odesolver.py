@@ -14,7 +14,7 @@ def main(filename=None, filename2=None):
     else:
         fig.savefig(filename)
 
-    fig2 = plot_errors(dx_dt, true_solution, x0_error, t0=0, tf=10)
+    fig2 = plot_errors(dx_dt, true_solution, x0_error, t0=0, tf=2)
     if filename2 is None:
         plt.show()
     else:
@@ -23,7 +23,6 @@ def main(filename=None, filename2=None):
 
 def euler_step(f,x0,t0,h):
     x1 = x0 + h*f(t0,x0)
-    t1 = t0+h
     return x1
 
 def rk4_step(f,x0,t0,h):
@@ -48,16 +47,16 @@ def true_solution(t):
     return np.exp(t)
 
 
-def solve_to(func, x0, t0, tf, method, h=1):
-    t = np.arange(t0, tf, h) #Create an array of times from t0 to tf
+def solve_to(func, x0, t0, tf, deltat_max, method):
+    t = np.arange(t0, tf, deltat_max) #Create an array of times from t0 to tf
     sol = np.zeros((len(t), len(x0))) #Create an array to hold the solution
     sol[0] = x0 #Set the initial conditions
 
     for i in range(len(t)-1):
         if method == 'euler':
-            sol[i+1] = euler_step(func, sol[i], t[i], h)
+            sol[i+1] = euler_step(func, sol[i], t[i], deltat_max)
         elif method == 'rk4':
-            sol[i+1] = rk4_step(func, sol[i], t[i], h)
+            sol[i+1] = rk4_step(func, sol[i], t[i], deltat_max)
         else:
             raise ValueError("Invalid method. Use 'euler' or 'rk4'")
 
@@ -65,12 +64,20 @@ def solve_to(func, x0, t0, tf, method, h=1):
 
 
 def solve_ode(func, x0, t, method, h):
-   
+    #Params:func = function to solve
+    #Params: x0 = initial conditions
+    #Params: t = array of times which you want to solve for
+    #Params: method = 'euler' or 'rk4'
+    #Params: h = time step
+    #Returns: sol = solution array
+    '''
+    Could input tspan = [t0,tf] and use np.arange(t0,tf,h) to create the array of times
+    '''
     sol = np.zeros((len(t), len(x0))) #Create an array to hold the solution
     sol[0] = x0 #Set the initial conditions
     
     for i in range(len(t)-1):
-        sol[i+1], tf = solve_to(func, sol[i], t[i], t[i+1], method, h) #Solve the ODE at each time step
+        sol[i+1], tf = solve_to(func, sol[i], t[i], t[i+1], h, method) #Solve the ODE at each time step
     
     # x_sol = sol[:, 0] #Extract the x values
     # y_sol = sol[:, 1] #Extract the y values
@@ -116,13 +123,13 @@ def plot_errors(dx_dt, true_solution, x0, t0, tf):
     errors_rk4 = []
 
     for h in timestep_values:
-        x,t = solve_to(dx_dt,x0,t0,tf,method='euler',h=h)
+        x,t = solve_to(dx_dt,x0,t0,tf,h,'euler')
         true_values = true_solution(t)
         error = np.abs(true_values - x[-1])
         errors_euler.append(error)
 
     for h in timestep_values:
-        x,t = solve_to(dx_dt,x0,t0,tf,method='rk4',h=h)
+        x,t = solve_to(dx_dt,x0,t0,tf,h,'rk4')
         true_values = true_solution(t)
         error = np.abs(true_values - x[-1])
         errors_rk4.append(error)
@@ -132,7 +139,7 @@ def plot_errors(dx_dt, true_solution, x0, t0, tf):
     ax.set_ylabel('Error')
     ax.set_xlabel('Time Steps')
     ax.legend()
-    fig.savefig('error_plot.jpeg')
+    # fig.savefig('error_plot.jpeg')
     return fig
 
 
