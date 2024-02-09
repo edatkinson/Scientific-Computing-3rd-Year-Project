@@ -14,73 +14,70 @@ Hence, limit cycles of (3) can be found by passing (6) along with a suitable ini
 All of the above can be trivially generalised to arbitrary periodically- forced ODEs of any number of dimensions.
 
 '''
-def lokta_volterra(t,x,beta):
+
+
+def lokta_volterra(t,x,params: list):
     #x = [x,y]
     alpha = 1
     delta = 0.1
     dxdt = x[0]*(1-x[0]) - (alpha*x[0]*x[1])/(delta + x[0])
-    dydt = beta * x[1] * (1 - (x[1]/x[0]))
-    return np.array([dxdt,dydt])
+    dydt = params[0] * x[1] * (1 - (x[1]/x[0]))
 
-def equations_to_solve(x, beta):
-    alpha = 1
-    delta = 0.1
-    dxdt = x[0]*(1 - x[0]) - (alpha * x[0] * x[1]) / (delta + x[0])
-    dydt = beta * x[1] * (1 - (x[1] / x[0]))
-    return [dxdt, dydt]
-beta = 0.26
-#initial conditions: 
-x0 = [0.27015621,0.3]
-tspan = [0,150]
-sol = solve_ivp(lokta_volterra, tspan, x0, args=(beta,), t_eval=np.linspace(*tspan,10000))
-#sol has solutions sol.t and sol.y where sol.y = [x,y]
-
-roots = fsolve(equations_to_solve, x0, args=(beta,))
-print(f"Roots: {roots}")
-
-dxdt = np.gradient(sol.y[0], sol.t)
-dydt = np.gradient(sol.y[1], sol.t)
+    dXdt = np.array([dxdt,dydt])
+    return dXdt
 
 
+#####Root finding problem########
 
-plt.figure(figsize=(12, 5))
-plt.subplot(1, 2, 1)
-plt.plot(sol.t, sol.y[0], label='Prey')
-plt.plot(sol.t, sol.y[1], label='Predator')
-plt.annotate('Initial conditions: ({:.2f}, {:.2f})'.format(*x0), xy=(0.5, 0.1), xycoords='axes fraction', bbox=dict(boxstyle="round,pad=0.5", fc="white", ec="black", lw=2))
-plt.xlabel('Time')
-plt.ylabel('Population')
-plt.legend()
+#integrator for the shooting problem
+def integrate(ode,u0,T): #u0 is the initial guess [u1, u2]
+    t = np.linspace(0,T,50)
+    sol = solve_ivp(ode,[0,T],u0)
+    return sol.y[:,-1]
 
-# Phase space plot
-plt.subplot(1, 2, 2)
-plt.plot(sol.y[0], sol.y[1],alpha=0.5)
-plt.xlabel('Prey Population')
-plt.ylabel('Predator Population')
-plt.title('Phase Space')
+def phase_condition(ode,u0,T):
+    #return the phase condition which is du(1)/dt(0) = 0
+    return np.array([ode(0,u0)[0]])
 
+def shoot(ode, estimate, phase_condition):
+    u0 = estimate[0:-1] #intial guess
+    T = estimate[-1] #Estimating the period of the orbit
+    return np.hstack((u0-integrate(ode,u0,T),phase_condition(ode,u0,T)))
 
-arrows = np.arange(0,len(sol.t),100)
-for i in arrows:
-    plt.quiver(sol.y[0][i],sol.y[1][i],dxdt[i],dydt[i],angles='xy',scale_units='xy',scale=1.6, alpha=0.3)
+def orbit(ode, uinitial, duration):
+    sol = solve_ivp(ode, (0, duration), uinitial)
+    return sol
+    
+def ode(function, params): #callable function, params = list of parameters
+    return lambda t, U: function(t, U, params) #returns a function of t and U f(t,U) as in the notes
 
-x = np.linspace(0.1, 0.5, 30)
-y = np.linspace(0.1, 0.5, 30)
-X, Y = np.meshgrid(x, y)
-plt.xlim(0.18,0.4)
-plt.ylim(0.18,0.35)
+def limit_cycle_finder(ode, estimate, phase_condition):
+    ode(1,estimate[0:-1])
+    result = fsolve(lambda estimate: shoot(ode,estimate,phase_condition),estimate) 
+    #Lambda function to pass the function shoot to fsolve to make shoot = 0
+    #result = initial conditions of u which makes shoot function = 0
+    isolated_orbit = orbit(ode, result[0:-1],result[-1])
+    return result, isolated_orbit
 
-# Compute the rate of change at each point on the grid
-U, V = lokta_volterra(0, [X, Y], beta)
+def phase_portrait_plotter(sol):
+    plt.plot(sol.y[0, :], sol.y[1, :], label='Isolated periodic orbit')
+    plt.xlabel('$x$')
+    plt.ylabel('$y$')
+    plt.title('Phase portrait')
+    plt.legend()
+    
+    return plt
 
-# Normalize the arrows so their size represents the speed
-N = np.sqrt(U**2 + V**2)
-U /= N
-V /= N
-plt.quiver(X, Y, U, V, angles='xy')
-plt.tight_layout()
-plt.savefig('Periodic_orbit.png')
-plt.show()
+#estimate = [u1, u2, T]
+initial_guess = [0.5, 2, 40]
+params = [0.26] #beta = 0.26
+roots, limit_cycle = limit_cycle_finder(ode(lokta_volterra,params),initial_guess,phase_condition)
+print(roots)
+fig = phase_portrait_plotter(limit_cycle)
+fig.show()
+
+# So [ 0.37355557  0.29663022 36.07224553] are the initial conditions and period of the periodic orbit
+
 
 
 
