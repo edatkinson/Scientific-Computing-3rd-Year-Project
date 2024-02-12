@@ -46,22 +46,40 @@ def dx_dt(t,x):
 def true_solution(t):
     return np.exp(t)
 
-
 def solve_to(func, x0, t0, tf, deltat_max, method):
-    t = np.arange(t0, tf, deltat_max) #Create an array of times from t0 to tf
-    sol = np.zeros((len(t), len(x0))) #Create an array to hold the solution
-    sol[0] = x0 #Set the initial conditions
-
-    for i in range(len(t)-1):
+    """
+    Numerically solves a differential equation using the specified method.
+    
+    Parameters:
+    - func: The function to be solved, which takes time t and state x as inputs.
+    - x0: The initial state.
+    - t0: The initial time.
+    - tf: The final time.
+    - deltat_max: The maximum time step.
+    - method: The numerical method to use ('euler' or 'rk4').
+    
+    Returns:
+    - The final state of the system and the corresponding time.
+    """
+    # Adjusting the time steps to ensure the final time step lands exactly on tf
+    num_steps = int(np.ceil((tf - t0) / deltat_max))
+    actual_deltat = (tf - t0) / num_steps  # Adjust time step size
+    t = np.linspace(t0, tf, num_steps + 1)  # Include tf in the array
+    
+    # Preallocate solution array
+    sol = np.zeros((len(t),) + np.shape(x0))
+    sol[0] = x0
+    
+    # Integration loop
+    for i in range(num_steps):
         if method == 'euler':
-            sol[i+1] = euler_step(func, sol[i], t[i], deltat_max)
+            sol[i + 1] = euler_step(func, sol[i], t[i], actual_deltat)
         elif method == 'rk4':
-            sol[i+1] = rk4_step(func, sol[i], t[i], deltat_max)
+            sol[i + 1] = rk4_step(func, sol[i], t[i], actual_deltat)
         else:
             raise ValueError("Invalid method. Use 'euler' or 'rk4'")
-
-    return sol[-1], t[-1] #Return only the final state
-
+    
+    return sol[-1], t[-1]
 
 def solve_ode(func, x0, t, method, h):
     #Params:func = function to solve

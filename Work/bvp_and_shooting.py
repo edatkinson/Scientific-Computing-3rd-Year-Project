@@ -3,7 +3,8 @@ import numpy as np
 import matplotlib.pyplot as plt 
 from scipy.optimize import fsolve
 from scipy.integrate import solve_ivp
-#to Isolate a periodic orbit, 
+from odesolver import solve_ode
+
 '''
 To find limit cycles, we must solve the periodic boundary value problem (BVP)
 Solve u(0) - u(T) = 0, = u0 - F(u0, T) = 0.
@@ -35,30 +36,55 @@ def hopf(t,u,params: list):#params = [beta, sigma]
 
 #####Root finding problem########
 
+def ode(function, params): #callable function, params = list of parameters
+    return lambda t, U: function(t, U, params) #returns a function of t and U f(t,U) as in the notes
+
+
 #integrator for the shooting problem
 def integrate(ode,u0,T): #u0 is the initial guess [u1, u2]
     t = np.linspace(0,T,150)
-    sol = solve_ivp(ode,[0,T],u0)
-    return sol.y[:,-1]
+    #solv = solve_ivp(ode,[0,T],u0)
+    sol, t = solve_ode(ode,u0,t,'rk4',0.1)
+    # x_sol = sol[:, 0] #Extract the x values
+    # y_sol = sol[:, 1] #Extract the y values
+    #t_sol = t #Extract the time values (array of times)
+    #return sol.y[:,-1]
+    return sol[-1,:]
 
 def phase_condition(ode,u0,T):
-    #return the phase condition which is du(1)/dt(0) = 0
+    #return the phase condition which is du1/dt(0) = 0
     return np.array([ode(0,u0)[0]]) 
 
 def shoot(ode, estimate, phase_condition):
+    ''' 
+    API
+    A function which performs numerical shooting.
+
+    Parameters
+    __________
+
+    ode : callable function with parameters, f(t,u,params)
+    estimate: list of initial guesses for the periodic orbit, e.g. [u1, u2, T]
+    phase_condition: callable function, phase_condition(ode,u0,T)
+    
+    Returns
+    _______
+
+    An array of [u0 - A, u1 - B, phasecondition]
+    
+    '''
+    
     u0 = estimate[0:-1] #intial guess
     T = estimate[-1] #Estimating the period of the orbit
     return np.hstack((u0-integrate(ode,u0,T),phase_condition(ode,u0,T)))
 
+
 def orbit(ode, uinitial, duration):
     sol = solve_ivp(ode, (0, duration), uinitial)
     return sol
-    
-def ode(function, params): #callable function, params = list of parameters
-    return lambda t, U: function(t, U, params) #returns a function of t and U f(t,U) as in the notes
 
 def limit_cycle_finder(ode, estimate, phase_condition):
-    ode(1,estimate[0:-1])
+    #root finding problem
     result = fsolve(lambda estimate: shoot(ode,estimate,phase_condition),estimate) 
     #Lambda function to pass the function shoot to fsolve to make shoot = 0
     #result = initial conditions of u which makes shoot function = 0
