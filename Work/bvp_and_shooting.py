@@ -22,22 +22,28 @@ def lokta_volterra(t,x,params: list):
     delta = 0.1
     dxdt = x[0]*(1-x[0]) - (alpha*x[0]*x[1])/(delta + x[0])
     dydt = params[0] * x[1] * (1 - (x[1]/x[0]))
-
     dXdt = np.array([dxdt,dydt])
     return dXdt
+
+def hopf(t,u,params: list):#params = [beta, sigma]
+    beta, sigma = params
+    du1dt = beta*u[0] - u[1] + sigma*u[0] * ((u[0])**2 + (u[1])**2)
+    du2dt = u[0] + beta*u[1] + sigma*u[1] * ((u[0])**2 + (u[1])**2) 
+    dUdt = np.array([du1dt,du2dt])
+    return dUdt
 
 
 #####Root finding problem########
 
 #integrator for the shooting problem
 def integrate(ode,u0,T): #u0 is the initial guess [u1, u2]
-    t = np.linspace(0,T,50)
+    t = np.linspace(0,T,150)
     sol = solve_ivp(ode,[0,T],u0)
     return sol.y[:,-1]
 
 def phase_condition(ode,u0,T):
     #return the phase condition which is du(1)/dt(0) = 0
-    return np.array([ode(0,u0)[0]])
+    return np.array([ode(0,u0)[0]]) 
 
 def shoot(ode, estimate, phase_condition):
     u0 = estimate[0:-1] #intial guess
@@ -69,15 +75,22 @@ def phase_portrait_plotter(sol):
     return plt
 
 #estimate = [u1, u2, T]
-initial_guess = [0.5, 2, 40]
-params = [0.26] #beta = 0.26
-roots, limit_cycle = limit_cycle_finder(ode(lokta_volterra,params),initial_guess,phase_condition)
+initial_guess = [0.5, 2, 30]
+params = [0.9, -1] #beta = any, sigma = -1
+roots, limit_cycle = limit_cycle_finder(ode(hopf,params),initial_guess,phase_condition)
 print(roots)
 fig = phase_portrait_plotter(limit_cycle)
-fig.show()
+#fig.show()
 
 # So [ 0.37355557  0.29663022 36.07224553] are the initial conditions and period of the periodic orbit
 
+t = np.linspace(0,10,100)
 
+beta, sigma = params
+theta = 1
+u1 = beta**0.5 * np.cos(t+theta)
+u2 = beta**0.5 * np.sin(t+theta)
 
+plt.plot(u1,u2)
+plt.show()
 
