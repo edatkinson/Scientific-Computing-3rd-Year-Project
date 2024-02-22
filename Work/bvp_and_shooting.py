@@ -86,7 +86,9 @@ def shoot(ode, estimate, phase_condition):
 
 
 def orbit(ode, uinitial, duration):
-    sol = solve_ivp(ode, (0, duration), uinitial)
+    #sol = solve_ivp(ode, (0, duration), uinitial) 
+    t = np.linspace(0,duration,150)
+    sol, t = solve_ode(ode,uinitial,t,'rk4',0.01)
     return sol
 
 def limit_cycle_finder(ode, estimate, phase_condition):
@@ -98,7 +100,7 @@ def limit_cycle_finder(ode, estimate, phase_condition):
     return result, isolated_orbit
 
 def phase_portrait_plotter(sol):
-    plt.plot(sol.y[0, :], sol.y[1, :], label='Isolated periodic orbit')
+    plt.plot(sol[:,0], sol[:,1], label='Isolated periodic orbit')
     plt.xlabel('$x$')
     plt.ylabel('$y$')
     plt.title('Phase portrait')
@@ -106,7 +108,7 @@ def phase_portrait_plotter(sol):
 
     fig = plt.figure()
     ax = fig.add_subplot(111, projection='3d')
-    ax.plot(sol.y[0, :], sol.y[1, :], sol.y[2,:], label='Isolated periodic orbit')
+    ax.plot(sol[:,0], sol[:,1], sol[:,2], label='Isolated periodic orbit')
     ax.set_xlabel('u1')
     ax.set_ylabel('u2')
     ax.set_zlabel('u3')
