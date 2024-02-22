@@ -16,4 +16,21 @@ fig = bvp_and_shooting.phase_portrait_plotter(limit_cycle)
 fig.show()
 
 # %%
+t = np.linspace(0,10,100)
 
+beta, sigma = params
+theta = 1 
+u1 = beta**0.5 * np.cos(t+theta)
+u2 = beta**0.5 * np.sin(t+theta)
+
+plt.plot(u1,u2)
+plt.show()
+
+
+# %%
+
+plt.plot(u1,u2)
+plt.plot(limit_cycle.y[0, :], limit_cycle.y[1, :], label='Isolated periodic orbit')
+plt.show()
+
+# %%

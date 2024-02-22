@@ -100,7 +100,8 @@ def solve_ode(func, x0, t, method, h):
     # x_sol = sol[:, 0] #Extract the x values
     # y_sol = sol[:, 1] #Extract the y values
     t_sol = t #Extract the time values (array of times)
-    return  sol, t_sol
+    #print(sol)
+    return sol, t_sol
 
 
 def plot_solution(t, x, v):
