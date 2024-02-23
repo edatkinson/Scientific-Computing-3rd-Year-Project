@@ -116,14 +116,14 @@ def phase_portrait_plotter(sol):
     return plt, fig
 
 #estimate = [u1, u2, T]
-initial_guess = [1,1,10] #I get errors when the initial guesses are far away from the limit cycle
-initial_guess2 = [1,1,1,100] #[u1, u2, u3, T]
-hopf_params = [0.9, -1] #beta = any, sigma = -1
-lokta_params = [1,0.1,0.26]  #alpha, delta, beta
-roots, limit_cycle = limit_cycle_finder(ode(hopf_3dim,hopf_params),initial_guess2,phase_condition)
-print(roots)
-fig1,fig2 = phase_portrait_plotter(limit_cycle)
-plt.show()
+# initial_guess = [1,1,10] #I get errors when the initial guesses are far away from the limit cycle
+# initial_guess2 = [1,1,1,100] #[u1, u2, u3, T]
+# hopf_params = [0.9, -1] #beta = any, sigma = -1
+# lokta_params = [1,0.1,0.26]  #alpha, delta, beta
+# roots, limit_cycle = limit_cycle_finder(ode(hopf_3dim,hopf_params),initial_guess2,phase_condition)
+# print(roots)
+# fig1,fig2 = phase_portrait_plotter(limit_cycle)
+# plt.show()
 
 # So [ 0.37355557  0.29663022 36.07224553] are the initial conditions and period of the periodic orbit
 
