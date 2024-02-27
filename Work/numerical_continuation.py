@@ -46,7 +46,7 @@ def natural_continuation(myode, u0, step_size, param_bounds):
     for param in param_values:
         #make an approximation of the solution
         u_tilde = sol[-1] 
-        u_next = fsolve(myode,u_tilde)
+        u_next = fsolve(lambda u: myode(0,u,param),u_tilde)
         sol.append(u_next)
     
     return np.array(sol), param_values
@@ -61,7 +61,7 @@ param_bounds = [0,2]
 #u_list, parameter_list = cubic_continuation(cubic, u0, step_size, params)
 sol, param_vals = natural_continuation(hopf, u0, step_size, param_bounds)
 
-plt.plot(param_vals,sol[:,0])
+plt.plot(param_vals,sol[:-1,1])
 plt.xlabel('Parameter')
 plt.ylabel('Solution')
 plt.title('Natural Continuation')
