@@ -106,16 +106,19 @@ def phase_portrait_plotter(sol):
     plt.title('Phase portrait')
     plt.legend()
 
-    fig = plt.figure()
-    ax = fig.add_subplot(111, projection='3d')
-    ax.plot(sol[:,0], sol[:,1], sol[:,2], label='Isolated periodic orbit')
-    ax.set_xlabel('u1')
-    ax.set_ylabel('u2')
-    ax.set_zlabel('u3')
+    # fig = plt.figure()
+    # ax = fig.add_subplot(111, projection='3d')
+    # ax.plot(sol[:,0], sol[:,1], sol[:,2], label='Isolated periodic orbit')
+    # ax.set_xlabel('u1')
+    # ax.set_ylabel('u2')
+    # ax.set_zlabel('u3')
     
-    return plt, fig
+    return plt#, fig
 
-#estimate = [u1, u2, T]
+
+
+
+# estimate = [u1, u2, T]
 # initial_guess = [1,1,10] #I get errors when the initial guesses are far away from the limit cycle
 # initial_guess2 = [1,1,1,100] #[u1, u2, u3, T]
 # hopf_params = [0.9, -1] #beta = any, sigma = -1
@@ -125,7 +128,7 @@ def phase_portrait_plotter(sol):
 # fig1,fig2 = phase_portrait_plotter(limit_cycle)
 # plt.show()
 
-# So [ 0.37355557  0.29663022 36.07224553] are the initial conditions and period of the periodic orbit
+# #So [ 0.37355557  0.29663022 36.07224553] are the initial conditions and period of the periodic orbit
 
 # t = np.linspace(0,10,100)
 
