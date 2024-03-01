@@ -49,17 +49,16 @@ def ode(function: callable, params: list): #callable function, params = list of 
 #integrator using my ode_solve function for the shooting problem
 def integrate(ode,u0,T): #u0 is the initial guess [u1, u2]
     t = np.linspace(0,T,150)
-    #solv = solve_ivp(ode,[0,T],u0)
     sol, t = solve_ode(ode,u0,t,'rk4',0.01)
+    #solv = solve_ivp(ode,[0,T],u0)
     # x_sol = sol[:, 0] #Extract the x values
     # y_sol = sol[:, 1] #Extract the y values
-    #t_sol = t #Extract the time values (array of times)
     #return solv.y[:,-1]
     return sol[-1,:]
 
 def phase_condition(ode,u0,T):
     #return the phase condition which is du1/dt(0) = 0
-    return np.array([ode(0,u0)[0]]) 
+    return np.array([ode(0,u0)[0]])
 
 def shoot(ode, estimate, phase_condition):
     ''' 
@@ -80,7 +79,7 @@ def shoot(ode, estimate, phase_condition):
     
     '''
     
-    u0 = estimate[0:-1] #except the last estimate which is T
+    u0 = estimate[0:-1] # Extracting u0 from [u0,u1,T]
     T = estimate[-1] #Estimating the period of the orbit
     return np.hstack((u0-integrate(ode,u0,T),phase_condition(ode,u0,T)))
 
@@ -95,8 +94,10 @@ def limit_cycle_finder(ode, estimate, phase_condition):
     #root finding problem
     result = fsolve(lambda estimate: shoot(ode,estimate,phase_condition),estimate) 
     #Lambda function to pass the function shoot to fsolve to make shoot = 0
-    #result = initial conditions of u which makes shoot function = 0
+    #result = estimated initial conditions of u which makes shoot function = 0
     isolated_orbit = orbit(ode, result[0:-1],result[-1]) #result[-1] is the period of the orbit, result[0:-1] are the initial conditions
+    #Isolated_Orbit is the numerical approximation of the limit cycle ODE
+
     return result, isolated_orbit
 
 def phase_portrait_plotter(sol):
@@ -106,6 +107,7 @@ def phase_portrait_plotter(sol):
     plt.title('Phase portrait')
     plt.legend()
 
+    #Code to plot the 3D Hopf limit cycle:
     # fig = plt.figure()
     # ax = fig.add_subplot(111, projection='3d')
     # ax.plot(sol[:,0], sol[:,1], sol[:,2], label='Isolated periodic orbit')
@@ -116,27 +118,35 @@ def phase_portrait_plotter(sol):
     return plt#, fig
 
 
+#Create a Main function which does the code below
+
+def main():
+    # estimate = [u1, u2, T]
+    initial_guess = [1,1,10] #I get errors when the initial guesses are far away from the limit cycle
+    # initial_guess2 = [1,1,1,100] #[u1, u2, u3, T] (for the 3d hopf)
+    hopf_params = [0.9, -1] #beta = any, sigma = -1
+    lokta_params = [1,0.1,0.26]  #alpha, delta, beta
+    hopf_roots, hopf_limit_cycle = limit_cycle_finder(ode(hopf,hopf_params),initial_guess,phase_condition)
+    fig1 = phase_portrait_plotter(hopf_limit_cycle) #plot the limit cycle
+    t = np.linspace(0,10,100)
+    beta, sigma = hopf_params
+    theta = 1
+    u1 = beta**0.5 * np.cos(t+theta)
+    u2 = beta**0.5 * np.sin(t+theta)
+    plt.plot(u1,u2) #plot the analytical phase portrait of the limit cycle
+    plt.show()
+
+    lokta_roots, lokta_limit_cycle = limit_cycle_finder(ode(lokta_volterra,lokta_params),initial_guess,phase_condition)
+
+    fig2 = phase_portrait_plotter(lokta_limit_cycle)
+    fig2.show()
 
 
-# estimate = [u1, u2, T]
-# initial_guess = [1,1,10] #I get errors when the initial guesses are far away from the limit cycle
-# initial_guess2 = [1,1,1,100] #[u1, u2, u3, T]
-# hopf_params = [0.9, -1] #beta = any, sigma = -1
-# lokta_params = [1,0.1,0.26]  #alpha, delta, beta
-# roots, limit_cycle = limit_cycle_finder(ode(hopf_3dim,hopf_params),initial_guess2,phase_condition)
-# print(roots)
-# fig1,fig2 = phase_portrait_plotter(limit_cycle)
-# plt.show()
 
-# #So [ 0.37355557  0.29663022 36.07224553] are the initial conditions and period of the periodic orbit
+if __name__ == "__main__":
+    main()
 
-# t = np.linspace(0,10,100)
 
-# beta, sigma = hopf_params
-# theta = 1
-# u1 = beta**0.5 * np.cos(t+theta)
-# u2 = beta**0.5 * np.sin(t+theta)
 
-# plt.plot(u1,u2)
-# plt.show()
 
+    
