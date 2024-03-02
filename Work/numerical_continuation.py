@@ -39,33 +39,54 @@ def cubic_continuation(ode,u0,step_size,param_bounds): #Uses natural continuatio
         u0 = root
     return roots, param_values
 
-def natural_continuation(myode, u0, step_size, param_bounds):
-    sol = [u0]
+def phase_condition(ode,u0,T):
+    #return the phase condition which is du1/dt(0) = 0
+    return np.array([ode(0,u0)[0]])
+
+def natural_continuation(myode, u0, step_size, param_bounds, phase_condition):
     param_values = np.arange(param_bounds[0],param_bounds[-1]+step_size,step_size)
+    sol = np.zeros(((len(param_values),len(u0))))
+    #first sol:
+    roots,_ = limit_cycle_finder(ode(myode, param_values[0]), u0, phase_condition)
+    sol[0] = roots
+    #Now use this known solution to find the next 
+    u_tilde = roots
+    for index,param in enumerate(param_values[1:]):
+        perturbed_roots,_ = limit_cycle_finder(ode(myode, param), u_tilde, phase_condition)
+        sol[index+1] = perturbed_roots
+        u_tilde = perturbed_roots #could use a linear combination of the previous solution and the perturbed solution
+
+    return sol[:,:], param_values[:]
+
     #For each perturbed parameter, approximate the solution using the previous solution as the initial guess, and append the solution to the list of solutions
-    for param in param_values:
-        #make an approximation of the solution
-        u_tilde = sol[-1] 
-        u_next = fsolve(lambda u: myode(0,u,param),u_tilde)
-        sol.append(u_next)
-    
-    return np.array(sol), param_values
+    #Need to find a solution using shooting algorithm and limit-cycle finder
+    #Watch the video
+    #for param in param_values:
 
 
 
-
-step_size = 0.01
-u0 = np.array([1,1])
+step_size = 0.05
+u0 = np.array([-2,2,5])
 param_bounds = [0,2]
 
-#u_list, parameter_list = cubic_continuation(cubic, u0, step_size, params)
-sol, param_vals = natural_continuation(hopf, u0, step_size, param_bounds)
 
-plt.plot(param_vals,sol[:-1,1])
-plt.xlabel('Parameter')
-plt.ylabel('Solution')
-plt.title('Natural Continuation')
+#u_list, parameter_list = cubic_continuation(cubic, u0, step_size, params)
+sol, param_values = natural_continuation(hopf, u0, step_size, param_bounds, phase_condition)
+
+# plt.plot(param_values,sol[:,0])
+# plt.plot(param_values,sol[:,1])
+# plt.plot(param_values,sol[:,2])
+#What value of Sol should i plot?
+#Sol array = [u1,u2,T] for each parameter value : 3xN array, what value of sol do i plot?
+# Subplot of all sol
+
+fig, ax = plt.subplots(3,1)
+ax[0].plot(param_values,sol[:,0])
+ax[1].plot(param_values,sol[:,1])
+ax[2].plot(param_values,sol[:,2])
+print(sol)
 plt.show()
+
 
 
 
