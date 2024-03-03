@@ -92,7 +92,8 @@ def orbit(ode, uinitial, duration):
 
 def limit_cycle_finder(ode, estimate, phase_condition):
     #root finding problem
-    result = fsolve(lambda estimate: shoot(ode,estimate,phase_condition),estimate) 
+    result = fsolve(lambda estimate: shoot(ode,estimate,phase_condition),estimate)
+
     #Lambda function to pass the function shoot to fsolve to make shoot = 0
     #result = estimated initial conditions of u which makes shoot function = 0
     isolated_orbit = orbit(ode, result[0:-1],result[-1]) #result[-1] is the period of the orbit, result[0:-1] are the initial conditions
