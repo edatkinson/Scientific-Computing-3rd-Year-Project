@@ -39,8 +39,6 @@ def phase_condition(ode,u0,T):
 
 def natural_continuation(myode,initial_guess, step_size, param_bounds, phase_condition):
     equilibria = [initial_guess[:-1]]
-    limit_cycle = [initial_guess]
-    points = []
     param_values = np.arange(param_bounds[0],param_bounds[-1]+step_size,step_size)
     for param in param_values:
         guess = equilibria[-1]
@@ -48,20 +46,19 @@ def natural_continuation(myode,initial_guess, step_size, param_bounds, phase_con
         equilibria.append(equilibrias)
 
 
-    sol = np.zeros(((len(param_values),len(initial_guess))))
-    roots, periodic_orbit = limit_cycle_finder(ode(myode, param_values[0]), initial_guess, phase_condition)
-    points.append(periodic_orbit[-1])
-    sol[0] = roots
-    #Now use this known solution to find the next 
-    u_tilde = roots
+    #Limit Cycle Continuation:
+    limit_cycle = np.zeros((len(param_values), len(initial_guess)))
+    initial_cycle, _ = limit_cycle_finder(ode(myode, param_values[0]), initial_guess, phase_condition)
+    limit_cycle[0] = initial_cycle
+    
     for index,param in enumerate(param_values[1:]):
-        perturbed_roots, periodic_orbit_ = limit_cycle_finder(ode(myode, param), u_tilde, phase_condition)
-        points.append(periodic_orbit_[-1])
-        sol[index+1] = perturbed_roots
-        u_tilde = perturbed_roots #could use a linear combination of the previous solution and the perturbed solution
+        prev_cycle = limit_cycle[index]
+        guess = prev_cycle + np.random.randn(*prev_cycle.shape) * 0.1
 
-    return np.array(equilibria[1:]), param_values, points
+        next_cycle,_ = limit_cycle_finder(ode(myode,param),guess,phase_condition)
+        limit_cycle[index+1] = next_cycle
 
+    return equilibria, param_values, limit_cycle
 
 
 #Write a function which displays how the limit cycle changes as the parameter changes
@@ -69,9 +66,6 @@ def natural_continuation(myode,initial_guess, step_size, param_bounds, phase_con
 #Repeat until the parameter range is exhausted
 #Plot the solutions
 #Plot the bifurcation diagram
-
-
-
 
 #sol = pseudo_method(hopf,[0,1,5,1.5],[1,0,5,2],phase_condition)
 
@@ -84,29 +78,31 @@ def natural_continuation(myode,initial_guess, step_size, param_bounds, phase_con
 
 
 
-
-step_size = 0.05
-initial_guess = np.array([3, 0.018, 5])
+step_size = 0.01
+initial_guess = np.array([-1.1,0.1,5])
 param_bounds = [0,2]
 
 
 #u_list, parameter_list = cubic_continuation(cubic, u0, step_size, params)
 equalibria, params, cycles = natural_continuation(hopf, initial_guess, step_size, param_bounds, phase_condition)
 
-#print(cycles)
-plt.plot(params,cycles)
+# Bifurcation Diagram:
+print(cycles)
+fig, ax = plt.subplots(3,1)
+ax[0].plot(params,cycles[:,0])
+ax[1].plot(params,cycles[:,1])
+ax[2].plot(params,cycles[:,2])
+
+ax[0].set_xlabel('Parameter')
+ax[1].set_xlabel('Parameter')
+ax[2].set_xlabel('Parameter')
+
+ax[0].set_ylabel('u1')
+ax[1].set_ylabel('u2')
+ax[2].set_ylabel('T')
+
 
 plt.show()
-
-
-
-
-# fig, ax = plt.subplots(3,1)
-# ax[0].plot(param_values,sol[:,0])
-# ax[1].plot(param_values,sol[:,1])
-# ax[2].plot(param_values,sol[:,2])
-# print(sol)
-# plt.show()
 
 
 
