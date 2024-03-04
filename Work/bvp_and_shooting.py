@@ -123,10 +123,10 @@ def phase_portrait_plotter(sol):
 
 def main():
     # estimate = [u1, u2, T]
-    initial_guess = [1,1,10] #I get errors when the initial guesses are far away from the limit cycle
+    initial_guess = [0.1,0.1,30] #I get errors when the initial guesses are far away from the limit cycle
     # initial_guess2 = [1,1,1,100] #[u1, u2, u3, T] (for the 3d hopf)
     hopf_params = [0.9, -1] #beta = any, sigma = -1
-    lokta_params = [1,0.1,0.26]  #alpha, delta, beta
+    lokta_params = [1,0.2,0.1]  #alpha, delta, beta
     hopf_roots, hopf_limit_cycle = limit_cycle_finder(ode(hopf,hopf_params),initial_guess,phase_condition)
     fig1 = phase_portrait_plotter(hopf_limit_cycle) #plot the limit cycle
     t = np.linspace(0,10,100)
@@ -138,7 +138,7 @@ def main():
     plt.show()
 
     lokta_roots, lokta_limit_cycle = limit_cycle_finder(ode(lokta_volterra,lokta_params),initial_guess,phase_condition)
-
+    print(lokta_roots)
     fig2 = phase_portrait_plotter(lokta_limit_cycle)
     fig2.show()
 

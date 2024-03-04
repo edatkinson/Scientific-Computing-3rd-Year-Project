@@ -31,33 +31,82 @@ def hopf(t,u,params):#params = [beta]
 
 
 
-def cubic_continuation(ode,u0,step_size,param_bounds): #Uses natural continuation on the cubic function
-    roots = []
-    param_values = np.arange(param_bounds[0],param_bounds[-1]+step_size,step_size)
-    for param in param_values:
-        root = fsolve(cubic, u0, args=(param,))
-        roots = np.append(roots, root[0])
-        u0 = root
-    return roots, param_values
 
 def phase_condition(ode,u0,T):
     #return the phase condition which is du1/dt(0) = 0
     return np.array([ode(0,u0)[0]])
 
 
-def nat_continuation(myode,initial_guess, step_size, param_bounds, phase_condition):
+def natural_continuation(myode,initial_guess, step_size, param_bounds, phase_condition):
     equilibria = [initial_guess[:-1]]
+    limit_cycle = [initial_guess]
+    points = []
     param_values = np.arange(param_bounds[0],param_bounds[-1]+step_size,step_size)
     for param in param_values:
         guess = equilibria[-1]
         equilibrias = fsolve(lambda u: myode(0,u,param), guess)
         equilibria.append(equilibrias)
 
-    return np.array(equilibria[1:]), param_values
+
+    sol = np.zeros(((len(param_values),len(initial_guess))))
+    roots, periodic_orbit = limit_cycle_finder(ode(myode, param_values[0]), initial_guess, phase_condition)
+    points.append(periodic_orbit[-1])
+    sol[0] = roots
+    #Now use this known solution to find the next 
+    u_tilde = roots
+    for index,param in enumerate(param_values[1:]):
+        perturbed_roots, periodic_orbit_ = limit_cycle_finder(ode(myode, param), u_tilde, phase_condition)
+        points.append(periodic_orbit_[-1])
+        sol[index+1] = perturbed_roots
+        u_tilde = perturbed_roots #could use a linear combination of the previous solution and the perturbed solution
+
+    return np.array(equilibria[1:]), param_values, points
+
+
+
+#Write a function which displays how the limit cycle changes as the parameter changes
+#Use the pseudo arc length method to find the next solution
+#Repeat until the parameter range is exhausted
+#Plot the solutions
+#Plot the bifurcation diagram
 
 
 
 
+#sol = pseudo_method(hopf,[0,1,5,1.5],[1,0,5,2],phase_condition)
+
+
+# 1. Find the first two solutions using the shooting algorithm
+# 2. Use the pseudo arc length method to find the next solution
+# 3. Repeat until the parameter range is exhausted
+# 4. Plot the solutions
+# 5. Plot the bifurcation diagram
+
+
+
+
+step_size = 0.05
+initial_guess = np.array([3, 0.018, 5])
+param_bounds = [0,2]
+
+
+#u_list, parameter_list = cubic_continuation(cubic, u0, step_size, params)
+equalibria, params, cycles = natural_continuation(hopf, initial_guess, step_size, param_bounds, phase_condition)
+
+#print(cycles)
+plt.plot(params,cycles)
+
+plt.show()
+
+
+
+
+# fig, ax = plt.subplots(3,1)
+# ax[0].plot(param_values,sol[:,0])
+# ax[1].plot(param_values,sol[:,1])
+# ax[2].plot(param_values,sol[:,2])
+# print(sol)
+# plt.show()
 
 
 
@@ -92,58 +141,6 @@ def pseudo_method(myode,current,guess,phase_condition): #current = [u_0,u_1,T_1,
 
     corrected_sol = fsolve(lambda U: augmented_system(myode,current,U,phase_condition),guess)
     return corrected_sol #This is the known solution with the limit cylce inducing parameter
-
-
-
-
-#Write a function which displays how the limit cycle changes as the parameter changes
-#Use the pseudo arc length method to find the next solution
-#Repeat until the parameter range is exhausted
-#Plot the solutions
-#Plot the bifurcation diagram
-
-
-
-
-#sol = pseudo_method(hopf,[0,1,5,1.5],[1,0,5,2],phase_condition)
-
-
-# 1. Find the first two solutions using the shooting algorithm
-# 2. Use the pseudo arc length method to find the next solution
-# 3. Repeat until the parameter range is exhausted
-# 4. Plot the solutions
-# 5. Plot the bifurcation diagram
-
-
-
-
-step_size = 0.05
-initial_guess = np.array([1,1,3])
-param_bounds = [0,2]
-
-
-#u_list, parameter_list = cubic_continuation(cubic, u0, step_size, params)
-sol, params = nat_continuation(hopf, initial_guess, step_size, param_bounds, phase_condition)
-print(sol)
-plt.plot(params,sol)
-plt.show()
-
-
-# plt.plot(param_values,sol[:,0])
-# plt.plot(param_values,sol[:,1])
-# plt.plot(param_values,sol[:,2])
-#What value of Sol should i plot?
-#Sol array = [u1,u2,T] for each parameter value : 3xN array, what value of sol do i plot?
-# Subplot of all sol
-
-# fig, ax = plt.subplots(3,1)
-# ax[0].plot(param_values,sol[:,0])
-# ax[1].plot(param_values,sol[:,1])
-# ax[2].plot(param_values,sol[:,2])
-# print(sol)
-# plt.show()
-
-
 
 
 

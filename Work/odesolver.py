@@ -62,7 +62,7 @@ def solve_to(func, x0, t0, tf, deltat_max, method):
     - The final state of the system and the corresponding time.
     """
     # Adjusting the time steps to ensure the final time step lands exactly on tf
-    num_steps = int(np.ceil((tf - t0) / deltat_max))
+    num_steps = abs(int(np.ceil((tf - t0) / deltat_max)))
     actual_deltat = (tf - t0) / num_steps  # Adjust time step size
     t = np.linspace(t0, tf, num_steps + 1)  # Include tf in the array
     
