@@ -21,16 +21,21 @@ results = continuation(
 
 def main():
     step_size = 0.01
-    initial_guess = np.array([-1.1,1.1,5])
+    initial_guess = np.array([2,1,5])
     param_bounds = [0,2]
-    option = 'limit cycle' # or equilibria
+    #option = 'limit cycle' # or equilibria
     #u_list, parameter_list = cubic_continuation(cubic, u0, step_size, params)
-    equalibria, params, cycles = natural_continuation(hopf_example, initial_guess, step_size, param_bounds, phase_condition,option)
+    sol,params,cycles = natural_continuation(
+        hopf_example, 
+        initial_guess, 
+        step_size, 
+        param_bounds, 
+        phase_condition)
     # Bifurcation Diagram:
-    print(cycles)
+    print(sol)
     fig, ax = plt.subplots(3,1)
-    ax[0].plot(params,cycles[:,0])
-    ax[1].plot(params,cycles[:,1])
+    ax[1].plot(params,cycles[:,0])
+    ax[0].plot(params,cycles[:,1])
     ax[2].plot(params,cycles[:,2])
 
     ax[0].set_xlabel('Parameter')
@@ -67,7 +72,7 @@ def phase_condition(ode,u0,T):
     return np.array([ode(0,u0)[0]])
 
 
-def natural_continuation(myode,initial_guess, step_size, param_bounds, phase_condition, option):
+def natural_continuation(myode,initial_guess, step_size, param_bounds, phase_condition):
     param_values = np.arange(param_bounds[0],param_bounds[-1]+step_size,step_size)
     equilibria = np.zeros((len(param_values),len(initial_guess[:-1])))
     limit_cycle = np.zeros((len(param_values), len(initial_guess)))
@@ -76,33 +81,31 @@ def natural_continuation(myode,initial_guess, step_size, param_bounds, phase_con
 
     initial_cycle, _ = limit_cycle_finder(ode(myode, param_values[0]), initial_guess, phase_condition)
     limit_cycle[0] = initial_cycle
-    
-    if option == 'equilibria':
 
-        for index,param in enumerate(param_values[1:]):
-            guess = equilibria[index]
-            equilibrias = fsolve(lambda u: myode(0,u,param), guess)
-            equilibria[index+1] = equilibrias
+    for index,param in enumerate(param_values[1:]):
+        guess = equilibria[index]
+        equilibrias = fsolve(lambda u: myode(0,u,param), guess)
+        equilibria[index+1] = equilibrias
 
-    elif option == 'limit cycle':
-        for index,param in enumerate(param_values[1:]):
-            prev_cycle = limit_cycle[index]
-            #guess = prev_cycle + np.random.randn(*prev_cycle.shape) * 0.01
-            
-            if len(limit_cycle[1,:]) > 3:
-                cycle1 = limit_cycle[index-1]
-                cycle2 = limit_cycle[index]
-                diff = cycle2 - cycle1
-                guess = 2*prev_cycle - limit_cycle[index-2]
-                #+ diff / (param_values[index] - param_values[index - 1]) * (param - param_values[index])
-            else:
-                guess = prev_cycle + [0.01,0.01,0.01]
-            next_cycle,_ = limit_cycle_finder(ode(myode,param),guess,phase_condition)
-            limit_cycle[index+1] = next_cycle
-    else:
-        raise ValueError("Invalid option. Use 'equilibria' or 'limit_cycle'")
 
-    return equilibria, param_values, limit_cycle
+    for index,param in enumerate(param_values[1:]):
+        prev_cycle = limit_cycle[index]
+        #guess = prev_cycle + np.random.randn(*prev_cycle.shape) * 0.01
+        
+        if len(limit_cycle[1,:]) > 3:
+            cycle1 = limit_cycle[index-1]
+            cycle2 = limit_cycle[index]
+            diff = cycle2 - cycle1
+            guess = 2*prev_cycle - limit_cycle[index-2]
+            #+ diff / (param_values[index] - param_values[index - 1]) * (param - param_values[index])
+        else:
+            guess = prev_cycle + [0.01,0.01,0.01]
+        next_cycle,_ = limit_cycle_finder(ode(myode,param),guess,phase_condition)
+        limit_cycle[index+1] = next_cycle
+
+    full_solution = np.hstack((equilibria,limit_cycle))
+
+    return full_solution, param_values, limit_cycle 
 
 
 
