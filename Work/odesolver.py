@@ -1,7 +1,7 @@
 import numpy as np 
 import matplotlib.pyplot as plt 
 import sys
-
+import math
 def main(filename=None, filename2=None):
     print(f"filename1: {filename}, filename2: {filename2}")
     t = np.linspace(0,20,100)
@@ -21,15 +21,15 @@ def main(filename=None, filename2=None):
         fig2.savefig(filename2)
 
 
-def euler_step(f,x0,t0,h):
-    x1 = x0 + h*f(t0,x0)
+def euler_step(f,x0,t0,h, **kwargs):
+    x1 = x0 + h*f(t0,x0,**kwargs)
     return x1
 
-def rk4_step(f,x0,t0,h):
-    k1 = f(t0,x0)
-    k2 = f(t0+h/2, x0+h*(k1/2))
-    k3 = f(t0+h/2,x0+h*(k2/2))
-    k4 = f(t0+h,x0+h*k3)
+def rk4_step(f,x0,t0,h, **kwargs):
+    k1 = f(t0,x0,**kwargs)
+    k2 = f(t0+h/2, x0+h*(k1/2),**kwargs)
+    k3 = f(t0+h/2,x0+h*(k2/2),**kwargs)
+    k4 = f(t0+h,x0+h*k3,**kwargs)
     x1 = x0 + h/6 * (k1 + 2*k2 + 2*k3 + k4)
     return x1
 
@@ -46,7 +46,7 @@ def dx_dt(t,x):
 def true_solution(t):
     return np.exp(t)
 
-def solve_to(func, x0, t0, tf, deltat_max, method):
+def solve_to(func, x0, t0, tf, deltat_max, method, **kwargs):
     """
     Numerically solves a differential equation using the specified method.
     
@@ -62,7 +62,11 @@ def solve_to(func, x0, t0, tf, deltat_max, method):
     - The final state of the system and the corresponding time.
     """
     # Adjusting the time steps to ensure the final time step lands exactly on tf
-    num_steps = abs(int(np.ceil((tf - t0) / deltat_max)))
+    print(tf)
+   
+    num_steps = abs(int(math.ceil((tf - t0) / deltat_max)))
+
+    #print(num_steps)
     actual_deltat = (tf - t0) / num_steps  # Adjust time step size
     t = np.linspace(t0, tf, num_steps + 1)  # Include tf in the array
     
@@ -73,15 +77,15 @@ def solve_to(func, x0, t0, tf, deltat_max, method):
     # Integration loop
     for i in range(num_steps):
         if method == 'euler':
-            sol[i + 1] = euler_step(func, sol[i], t[i], actual_deltat)
+            sol[i + 1] = euler_step(func, sol[i], t[i], actual_deltat, **kwargs)
         elif method == 'rk4':
-            sol[i + 1] = rk4_step(func, sol[i], t[i], actual_deltat)
+            sol[i + 1] = rk4_step(func, sol[i], t[i], actual_deltat, **kwargs)
         else:
             raise ValueError("Invalid method. Use 'euler' or 'rk4'")
     
     return sol[-1], t[-1]
 
-def solve_ode(func, x0, t, method, h):
+def solve_ode(func, x0, t, method, h, **kwargs):
     #Params:func = function to solve
     #Params: x0 = initial conditions
     #Params: t = array of times which you want to solve for
@@ -95,7 +99,7 @@ def solve_ode(func, x0, t, method, h):
     sol[0] = x0 #Set the initial conditions
     
     for i in range(len(t)-1):
-        sol[i+1], tf = solve_to(func, sol[i], t[i], t[i+1], h, method) #Solve the ODE at each time step
+        sol[i+1], tf = solve_to(func, sol[i], t[i], t[i+1], h, method, **kwargs) #Solve the ODE at each time step
     
     # x_sol = sol[:, 0] #Extract the x values
     # y_sol = sol[:, 1] #Extract the y values

@@ -1,10 +1,15 @@
 
 from odesolver import solve_ode
-from bvp_and_shooting import integrate, ode, phase_condition, shoot, limit_cycle_finder, hopf
+from bvp_and_shooting import phase_condition, shoot, limit_cycle_finder
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.optimize import fsolve
 from scipy.optimize import fsolve
+
+
+from Equations_Functions import hopf, modified_hopf
+
+import warnings 
 
 '''
 Example of a good interface
@@ -19,36 +24,49 @@ results = continuation(
 )
 '''
 
+
+
 def main():
-    step_size = 0.01
+    
+    steps = 5000
     initial_guess = np.array([2,1,5])
     param_bounds = [0,2]
-    #option = 'limit cycle' # or equilibria
-    #u_list, parameter_list = cubic_continuation(cubic, u0, step_size, params)
+    
     sol,params,cycles = natural_continuation(
         hopf_example, 
         initial_guess, 
-        step_size, 
+        steps, 
         param_bounds, 
         phase_condition)
-    # Bifurcation Diagram:
-    print(sol)
-    fig, ax = plt.subplots(3,1)
-    ax[1].plot(params,cycles[:,0])
-    ax[0].plot(params,cycles[:,1])
-    ax[2].plot(params,cycles[:,2])
+    
+    #sol, params, cycles 
+    #print(sol) Equilibria of hopf is always 0,0 - why?
 
-    ax[0].set_xlabel('Parameter')
-    ax[1].set_xlabel('Parameter')
-    ax[2].set_xlabel('Parameter')
+   # Bifurcation Diagram: 
+    plotter(params, cycles)
 
-    ax[0].set_ylabel('u1')
-    ax[1].set_ylabel('u2')
-    ax[2].set_ylabel('T')
+    # ####Pseudo Arc Length Method #####
 
+    # sol_1 = np.array([1,1,5,1.5])
+    # sol_2 = np.array([1,1.1,5,1.5])
+    # pseudo_arc_length_eq(sol_1, sol_2, 0.1)
+    # correct_sol = pseudo_method(hopf_example,sol_1,sol_2,phase_condition)
+    # print(sol)
+
+
+
+
+
+def plotter(params, cycles, eq):
+    plt.plot(param_values, cycles[:,2], label='T')
+    plt.legend()
     plt.show()
 
-    plt.plot(cycles[:,0],cycles[:,1])
+    plt.plot(param_values, cycles[:,0], label='u1')
+    plt.plot(param_values, cycles[:,1], label='u2')
+    plt.xlabel('Parameter')
+    plt.ylabel('u')
+    plt.legend()
     plt.show()
 
 
@@ -56,8 +74,8 @@ def cubic(t,x, param):
     f = x**3 - x - param
     return f
 
-def hopf_example(t,u,params):#params = [beta]
-    beta = params
+def hopf_example(t,u,pars):#params = (beta)
+    beta = pars
     du1dt = beta*u[0] - u[1] - u[0] * ((u[0])**2 + (u[1])**2)
     du2dt = u[0] + beta*u[1] - u[1] * ((u[0])**2 + (u[1])**2) 
     dUdt = np.array([du1dt,du2dt])
@@ -67,45 +85,44 @@ def hopf_example(t,u,params):#params = [beta]
 def secant(v0,v1):
     return v1 - v0
 
-def phase_condition(ode,u0,T):
-    #return the phase condition which is du1/dt(0) = 0
-    return np.array([ode(0,u0)[0]])
+def wrapper(x,pars):
+    return modified_hopf(0,x,pars)
 
-
-def natural_continuation(myode,initial_guess, step_size, param_bounds, phase_condition):
-    param_values = np.arange(param_bounds[0],param_bounds[-1]+step_size,step_size)
+def natural_continuation2(f,initial_guess,steps,param_bounds,phase_condition):
+    param_values = np.linspace(param_bounds[0],param_bounds[-1],steps)
     equilibria = np.zeros((len(param_values),len(initial_guess[:-1])))
     limit_cycle = np.zeros((len(param_values), len(initial_guess)))
-    
+    limit_cycle[0] = initial_guess
     equilibria[0] = initial_guess[:-1]
-
-    initial_cycle, _ = limit_cycle_finder(ode(myode, param_values[0]), initial_guess, phase_condition)
-    limit_cycle[0] = initial_cycle
-
-    for index,param in enumerate(param_values[1:]):
+    guess = initial_guess[:-1]
+    prev_cycle = initial_guess
+    for index,par in enumerate(param_values[1:]):
         guess = equilibria[index]
-        equilibrias = fsolve(lambda u: myode(0,u,param), guess)
+        equilibrias = fsolve(lambda u:modified_hopf(0,u,par), guess)
         equilibria[index+1] = equilibrias
+        print(equilibrias)
 
+    for index,par in enumerate(param_values[1:]):
+        sol, cycle = limit_cycle_finder(f,prev_cycle,phase_condition,par)
+        limit_cycle[index+1] = sol 
 
-    for index,param in enumerate(param_values[1:]):
-        prev_cycle = limit_cycle[index]
-        #guess = prev_cycle + np.random.randn(*prev_cycle.shape) * 0.01
-        
         if len(limit_cycle[1,:]) > 3:
             cycle1 = limit_cycle[index-1]
             cycle2 = limit_cycle[index]
-            diff = cycle2 - cycle1
-            guess = 2*prev_cycle - limit_cycle[index-2]
-            #+ diff / (param_values[index] - param_values[index - 1]) * (param - param_values[index])
+            #diff = cycle2 - cycle1
+            guess = 2*prev_cycle - limit_cycle[index-2] 
+            prev_cycle = guess
+            print(prev_cycle)
         else:
-            guess = prev_cycle + [0.01,0.01,0.01]
-        next_cycle,_ = limit_cycle_finder(ode(myode,param),guess,phase_condition)
-        limit_cycle[index+1] = next_cycle
+            prev_cycle = sol 
 
-    full_solution = np.hstack((equilibria,limit_cycle))
+    return limit_cycle[1:,:], param_values[1:], equilibria
 
-    return full_solution, param_values, limit_cycle 
+
+limit_cycle, param_values, eq = natural_continuation2(modified_hopf, [1.4,1,30], 1000, [2,-1], phase_condition)
+plotter(param_values, limit_cycle, eq)
+
+
 
 
 
@@ -149,12 +166,10 @@ def pseudo_method(myode,current,guess,phase_condition): #current = [u_0,u_1,T_1,
     corrected_sol = fsolve(augmented_system,guess)
     return corrected_sol #This is the known solution with the limit cylce inducing parameter
 
-# current = np.array([1, 1.1, 5, 1.5])
-# guess = np.array([1, 1.3, 5, 2])
-# sol = pseudo_method(hopf_example,current,guess,phase_condition)
+
+# if __name__ == "__main__":
+#     main()
 
 
 
-if __name__ == "__main__":
-    main()
 

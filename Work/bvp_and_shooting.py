@@ -1,10 +1,12 @@
 
 import numpy as np  
 import matplotlib.pyplot as plt 
-from scipy.optimize import fsolve
+from scipy.optimize import fsolve, root
 from scipy.integrate import solve_ivp
 from odesolver import solve_ode
 
+import warnings
+from Equations_Functions import lokta_volterra, hopf, hopf_3dim, modified_hopf
 '''
 To find limit cycles, we must solve the periodic boundary value problem (BVP)
 Solve u(0) - u(T) = 0, = u0 - F(u0, T) = 0.
@@ -17,92 +19,67 @@ All of the above can be trivially generalised to arbitrary periodically- forced 
 '''
 
 
-def lokta_volterra(t,x,params: list):
-    alpha, delta, beta = params
-    dxdt = x[0]*(1-x[0]) - (alpha*x[0]*x[1])/(delta + x[0])
-    dydt = beta * x[1] * (1 - (x[1]/x[0]))
-    dXdt = np.array([dxdt,dydt])
-    return dXdt
-
-def hopf(t,u,params: list):#params = [beta, sigma]
-    beta, sigma = params
-    du1dt = beta*u[0] - u[1] + sigma*u[0] * ((u[0])**2 + (u[1])**2)
-    du2dt = u[0] + beta*u[1] + sigma*u[1] * ((u[0])**2 + (u[1])**2) 
-    dUdt = np.array([du1dt,du2dt])
-    return dUdt
-
-def hopf_3dim(t,u,params: list):
-    beta, sigma = params
-    du1dt = beta*u[0] - u[1] + sigma*u[0] * ((u[0])**2 + (u[1])**2)
-    du2dt = u[0] + beta*u[1] + sigma*u[1] * ((u[0])**2 + (u[1])**2)
-    du3dt = -u[2]
-    dUdt = np.array([du1dt,du2dt,du3dt])
-    return dUdt
-
-
 #####Root finding problem and shooting########
 
-def ode(function: callable, params: list): #callable function, params = list of parameters
-    return lambda t, U: function(t, U, params) #returns a function of t and U f(t,U) as in the notes
-
-
-#integrator using my ode_solve function for the shooting problem
-def integrate(ode,u0,T): #u0 is the initial guess [u1, u2]
-    t = np.linspace(0,T,150)
-    sol, t = solve_ode(ode,u0,t,'rk4',0.01)
-    #solv = solve_ivp(ode,[0,T],u0)
-    # x_sol = sol[:, 0] #Extract the x values
-    # y_sol = sol[:, 1] #Extract the y values
-    #return solv.y[:,-1]
-    return sol[-1,:]
-
-def phase_condition(ode,u0,T):
+def phase_condition(ode,u0,pars):
     #return the phase condition which is du1/dt(0) = 0
-    return np.array([ode(0,u0)[0]])
+    return np.array([ode(0,u0,pars)[0]])
 
-def shoot(ode, estimate, phase_condition):
-    ''' 
-    API
-    A function which performs numerical shooting.
+def shoot(f, phase_cond):
+    """
+    Returns a function G for solving a boundary value problem using the shooting method.
 
-    Parameters
-    __________
-
-    ode : callable function with parameters, f(t,u,params)
-    estimate: list of initial guesses for the periodic orbit, e.g. [u1, u2, T]
-    phase_condition: callable function, phase_condition(ode,u0,T)
+    :param f: System of ODEs function.
+    :param phase_cond: Boundary conditions function.
+    :returns: Function G calculating differences between actual and guessed boundary conditions.
+    """
+    if not callable(f):
+        raise ValueError("f must be a callable function")
+    if not callable(phase_cond):
+        raise ValueError("phase_cond must be a callable function")
     
-    Returns
-    _______
+    def G(u0, T, pars):
+        """
+        Calculates differences between actual and guessed boundary conditions for a given problem.
 
-    An array of [u0 - A, u1 - B, phasecondition]
-    
-    '''
-    
-    u0 = estimate[0:-1] # Extracting u0 from [u0,u1,T]
-    T = estimate[-1] #Estimating the period of the orbit
-    return np.hstack((u0-integrate(ode,u0,T),phase_condition(ode,u0,T)))
+        :param u0: Initial guess for the solution.
+        :param T: Final time value.
+        :param pars: Dictionary of parameter values.
+        :returns: Numpy array of differences between actual and guessed boundary conditions.
+        """
+        # Ignore runTime warnings
+        
+        # Solve ODE system using Solve IVP 
+        t = np.linspace(0, T, 100)
+        #sol, t = solve_ode(f, u0, t, method='rk4', h=0.01,pars=pars)
+        sol = solve_ivp(f, (0, T), u0, t_eval=t, args=(pars,))
+        #final_sol = sol[-1, :]
+        final_sol = sol.y[:,-1]
+        # Calculate differences between actual and estimates
+        return np.append(u0 - final_sol, phase_cond(f, u0, pars=pars))
 
+    return G
 
-def orbit(ode, uinitial, duration):
-    #sol = solve_ivp(ode, (0, duration), uinitial) 
+def orbit(ode, uinitial, duration,pars):
     t = np.linspace(0,duration,150)
-    sol, t = solve_ode(ode,uinitial,t,'rk4',0.01)
-    return sol
+    sol = solve_ivp(ode, (0, duration), uinitial,t_eval=t ,args=(pars,))
+    #sol, t = solve_ode(ode,uinitial,t,'rk4',0.01,pars=pars)
+    return sol.y
 
-def limit_cycle_finder(ode, estimate, phase_condition):
+def limit_cycle_finder(ode, estimate, phase_condition, pars):
+    G = shoot(ode,phase_condition)
     #root finding problem
-    result = fsolve(lambda estimate: shoot(ode,estimate,phase_condition),estimate)
-
+    result = fsolve(lambda estimate: G(estimate[:-1], estimate[-1], pars),estimate, epsfcn=1e-10, xtol=1e-5)
+    #result = root(lambda estimate: G(estimate[:-1], estimate[-1], pars),estimate, method='hybr', options={'xtol':1e-5})
     #Lambda function to pass the function shoot to fsolve to make shoot = 0
     #result = estimated initial conditions of u which makes shoot function = 0
-    isolated_orbit = orbit(ode, result[0:-1],result[-1]) #result[-1] is the period of the orbit, result[0:-1] are the initial conditions
+    isolated_orbit = orbit(ode, result[0:-1],result[-1],pars=pars) #result[-1] is the period of the orbit, result[0:-1] are the initial conditions
     #Isolated_Orbit is the numerical approximation of the limit cycle ODE
 
     return result, isolated_orbit
 
 def phase_portrait_plotter(sol):
-    plt.plot(sol[:,0], sol[:,1], label='Isolated periodic orbit')
+    plt.plot(sol[0,:], sol[1,:], label='Isolated periodic orbit')
     plt.xlabel('$x$')
     plt.ylabel('$y$')
     plt.title('Phase portrait')
@@ -121,28 +98,27 @@ def phase_portrait_plotter(sol):
 
 #Create a Main function which does the code below
 
+
 def main():
-    # estimate = [u1, u2, T]
-    initial_guess = [0.1,0.1,30] #I get errors when the initial guesses are far away from the limit cycle
-    # initial_guess2 = [1,1,1,100] #[u1, u2, u3, T] (for the 3d hopf)
-    hopf_params = [0.9, -1] #beta = any, sigma = -1
-    lokta_params = [1,0.2,0.1]  #alpha, delta, beta
-    hopf_roots, hopf_limit_cycle = limit_cycle_finder(ode(hopf,hopf_params),initial_guess,phase_condition)
-    fig1 = phase_portrait_plotter(hopf_limit_cycle) #plot the limit cycle
+    # lokta_pars = (1,0.1,0.1)
+    # orbit, cycle1 = limit_cycle_finder(lokta_volterra, [0.1,0.1,30],phase_condition,lokta_pars)
+    # print('The true values of the Lokta-Volterra orbit:', orbit)
+    # fig1 = phase_portrait_plotter(cycle1) #plot the limit cycle
+    # plt.show()
+
+    hopf_pars = (0.9,-1)
+    orbit, cycle2 = limit_cycle_finder(hopf, [0.1,0.1,30.0],phase_condition,hopf_pars)
+    print('The true values of the Hopf orbit:', orbit)
+    fig2 = phase_portrait_plotter(cycle2) #plot the limit cycle
+    plt.show()
+
     t = np.linspace(0,10,100)
-    beta, sigma = hopf_params
+    beta,sigma = hopf_pars
     theta = 1
     u1 = beta**0.5 * np.cos(t+theta)
     u2 = beta**0.5 * np.sin(t+theta)
     plt.plot(u1,u2) #plot the analytical phase portrait of the limit cycle
     plt.show()
-
-    lokta_roots, lokta_limit_cycle = limit_cycle_finder(ode(lokta_volterra,lokta_params),initial_guess,phase_condition)
-    print(lokta_roots)
-    fig2 = phase_portrait_plotter(lokta_limit_cycle)
-    fig2.show()
-
-
 
 if __name__ == "__main__":
     main()
