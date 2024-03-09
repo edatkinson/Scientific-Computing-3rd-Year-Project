@@ -1,6 +1,15 @@
 import numpy as np
 
 
+def system_of_odes(t,x):
+    dxdt = x[1]
+    dydt = -x[0]
+    return np.array([dxdt, dydt])
+
+def dx_dt(t,x):
+    dx_dt = x
+    return dx_dt
+
 def lokta_volterra(t,x,pars):
     alpha, delta, beta = pars
     dxdt = x[0]*(1-x[0]) - (alpha*x[0]*x[1])/(delta + x[0])
@@ -23,7 +32,7 @@ def hopf_3dim(t,u,pars):
     dUdt = np.array([du1dt,du2dt,du3dt])
     return dUdt
 
-def modified_hopf(t,X, pars):
+def modified_hopf(t,u, pars):
     """
     Returns the time derivative of a 2D predator-prey system at a given time.
 
@@ -33,7 +42,7 @@ def modified_hopf(t,X, pars):
 
     :returns: A numpy array of length 2 containing the time derivatives of the state variables.
     """
-    (u1, u2) = X
+    (u1, u2) = u
     du1dt = (pars * u1) - u2 + u1 * (u1**2 + u2**2) - (u1 * (u1**2 + u2**2)**2)
     du2dt = u1 + (pars * u2) + u2 * (u1**2 + u2 ** 2)- (u2 * (u1**2 + u2 ** 2)**2)
     return np.array([du1dt, du2dt])

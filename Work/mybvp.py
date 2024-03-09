@@ -33,50 +33,37 @@ def shoot(f, phase_cond):
     :param phase_cond: Boundary conditions function.
     :returns: Function G calculating differences between actual and guessed boundary conditions.
     """
-
-    def G(u0, T, pars):
-        """
-        Calculates differences between actual and guessed boundary conditions for a given problem.
-
-        :param u0: Initial guess for the solution.
-        :param T: Final time value.
-        :param pars: Dictionary of parameter values.
-        :returns: Numpy array of differences between actual and guessed boundary conditions.
-        """
-        # Ignore runTime warnings
-        
+    def J(u0,T,pars):
         # Solve ODE system using Solve IVP 
         t = np.linspace(0, T, 100)
-        #sol, t = solve_ode(f, u0, t, method='rk4', h=0.01,pars=pars)
-        sol = solve_ivp(f, (0, T), u0, t_eval=t, args=(pars,))
-        #final_sol = sol[-1, :]
-        final_sol = sol.y[:,-1]
+        _,sol = solve_ode(f, (0,T), u0, h=0.01,method='rk4',pars=pars)
+        final_sol = sol[-1, :]
         #print(final_sol)
         # Calculate differences between actual and estimates
         return np.append(u0 - final_sol, phase_cond(f, u0, pars=pars))
 
-    return G
+    return J
 
-def orbit_ivp(ode, uinitial, duration,pars):
-    t = np.linspace(0,duration,150)
-    sol = solve_ivp(ode, (0, duration), uinitial,t_eval=t ,args=(pars,))
-    #print(sol.y)
-    return sol.y
+
+def orbit_my(ode, uinitial, duration,pars):
+    _,sol = solve_ode(ode, (0,duration),uinitial, h=0.01,method='rk4',pars=pars)
+    #print(sol[:,-1])
+    return sol
 
 def limit_cycle_finder(ode, estimate, phase_condition, pars):
-    G = shoot(ode,phase_condition)
+    J = shoot(ode,phase_condition)
     #root finding problem
-    result_ivp = fsolve(lambda estimate: G(estimate[:-1], estimate[-1], pars),estimate)
-  
-    ivpisolated_orbit = orbit_ivp(ode, result_ivp[0:-1],result_ivp[-1],pars=pars) #result[-1] is the period of the orbit, result[0:-1] are the initial conditions
-    ivpisolated_orbit = ivpisolated_orbit
+    result_my = fsolve(lambda estimate: J(estimate[:-1], estimate[-1], pars),estimate, xtol=1e-6, epsfcn=1e-6)
+
+    myisolated_orbit = orbit_my(ode, result_my[0:-1],result_my[-1],pars=pars) #result[-1] is the period of the orbit, result[0:-1] are the initial conditions
+    myisolated_orbit = myisolated_orbit
     
     #Isolated_Orbit is the numerical approximation of the limit cycle ODE
 
-    return result_ivp, ivpisolated_orbit
+    return result_my, myisolated_orbit
 
 def phase_portrait_plotter(sol):
-    plt.plot(sol[0,:], sol[1,:], label='Isolated periodic orbit')
+    plt.plot(sol[:,0], sol[:,1], label='Isolated periodic orbit')
     plt.xlabel('$x$')
     plt.ylabel('$y$')
     plt.title('Phase portrait')
@@ -97,17 +84,17 @@ def phase_portrait_plotter(sol):
 
 
 def main():
-    lokta_pars = (1,0.1,0.1)
-    orbit, cycle1 = limit_cycle_finder(lokta_volterra, [0.1,0.1,30],phase_condition,lokta_pars)
-    print('The true values of the Lokta-Volterra orbit:', orbit)
-    fig1 = phase_portrait_plotter(cycle1) #plot the limit cycle
-    plt.show()
+    # lokta_pars = (1,0.1,0.1)
+    # orbit, cycle1 = limit_cycle_finder(lokta_volterra, [0.1,0.1,30],phase_condition,lokta_pars)
+    # print('The true values of the Lokta-Volterra orbit:', orbit)
+    # fig1 = phase_portrait_plotter(cycle1) #plot the limit cycle
+    # plt.show()
 
     hopf_pars = (0.9,-1)
-    orbit, cycle2 = limit_cycle_finder(hopf, [2,1,5],phase_condition,hopf_pars)
+    orbit, cycle2 = limit_cycle_finder(hopf, [1,0,7],phase_condition,hopf_pars)
     print('The true values of the Hopf orbit:', orbit)
     fig2 = phase_portrait_plotter(cycle2) #plot the limit cycle
-    plt.show()
+    #plt.show()
 
     t = np.linspace(0,10,100)
     beta,sigma = hopf_pars
@@ -120,7 +107,3 @@ def main():
 if __name__ == "__main__":
     main()
 
-
-
-
-    

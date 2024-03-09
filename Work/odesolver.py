@@ -23,7 +23,8 @@ def main(filename=None, filename2=None):
 
 def euler_step(f,x0,t0,h, **kwargs):
     x1 = x0 + h*f(t0,x0,**kwargs)
-    return x1
+    t1 = t0 + h
+    return x1, t1
 
 def rk4_step(f,x0,t0,h, **kwargs):
     k1 = f(t0,x0,**kwargs)
@@ -31,7 +32,9 @@ def rk4_step(f,x0,t0,h, **kwargs):
     k3 = f(t0+h/2,x0+h*(k2/2),**kwargs)
     k4 = f(t0+h,x0+h*k3,**kwargs)
     x1 = x0 + h/6 * (k1 + 2*k2 + 2*k3 + k4)
-    return x1
+
+    t1 = t0 + h
+    return x1, t1
 
 
 def system_of_odes(t,x):

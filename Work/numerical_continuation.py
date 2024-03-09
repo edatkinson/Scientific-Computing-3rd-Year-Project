@@ -1,6 +1,7 @@
 
-from odesolver import solve_ode
-from bvp_and_shooting import phase_condition, shoot, limit_cycle_finder
+from new_ode_solver import solve_ode
+#from bvp_and_shooting import phase_condition, shoot, limit_cycle_finder
+from mybvp import phase_condition, shoot, limit_cycle_finder
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.optimize import fsolve
@@ -28,22 +29,20 @@ results = continuation(
 
 def main():
     
-    steps = 5000
-    initial_guess = np.array([2,1,5])
-    param_bounds = [0,2]
-    
-    sol,params,cycles = natural_continuation(
-        hopf_example, 
+    steps = 20
+    initial_guess = np.array([1, 1.0, 4])    #np.array([0.2,0.5,35]) works!
+    param_bounds = [2,-1]
+
+    limit_cycle, param_values, eq = natural_continuation(
+        modified_hopf, 
         initial_guess, 
         steps, 
         param_bounds, 
         phase_condition)
-    
-    #sol, params, cycles 
-    #print(sol) Equilibria of hopf is always 0,0 - why?
 
-   # Bifurcation Diagram: 
-    plotter(params, cycles)
+    #Bifurcation diagram of Limit cycle and equilibria
+    plotter(param_values, limit_cycle, eq)
+
 
     # ####Pseudo Arc Length Method #####
 
@@ -54,20 +53,36 @@ def main():
     # print(sol)
 
 
-
-
-
-def plotter(params, cycles, eq):
+def plotter(param_values, cycles, eq):
+    plt.figure(figsize=(8, 6))
     plt.plot(param_values, cycles[:,2], label='T')
-    plt.legend()
+    plt.xlabel('Parameter', fontsize=12)
+    plt.ylabel('T', fontsize=12)
+    plt.title('Bifurcation of T', fontsize=14)
+    plt.legend(fontsize=12)
+    plt.grid(True)
     plt.show()
 
+    plt.figure(figsize=(8, 6))
     plt.plot(param_values, cycles[:,0], label='u1')
     plt.plot(param_values, cycles[:,1], label='u2')
-    plt.xlabel('Parameter')
-    plt.ylabel('u')
-    plt.legend()
+    plt.xlabel('Parameter', fontsize=12)
+    plt.ylabel('u', fontsize=12)
+    plt.title('Bifurcation of u1 and u2', fontsize=14)
+    plt.legend(fontsize=12)
+    plt.grid(True)
     plt.show()
+
+    plt.figure(figsize=(8, 6))
+    plt.plot(param_values, eq[:,0], label='u1')
+    plt.plot(param_values, eq[:,1], label='u2')
+    plt.xlabel('Parameter', fontsize=12)
+    plt.ylabel('u', fontsize=12)
+    plt.title('Equilibria', fontsize=14)
+    plt.legend(fontsize=12)
+    plt.grid(True)
+    plt.show()
+
 
 
 def cubic(t,x, param):
@@ -88,39 +103,31 @@ def secant(v0,v1):
 def wrapper(x,pars):
     return modified_hopf(0,x,pars)
 
-def natural_continuation2(f,initial_guess,steps,param_bounds,phase_condition):
+def natural_continuation(f,initial_guess,steps,param_bounds,phase_condition):
     param_values = np.linspace(param_bounds[0],param_bounds[-1],steps)
     equilibria = np.zeros((len(param_values),len(initial_guess[:-1])))
     limit_cycle = np.zeros((len(param_values), len(initial_guess)))
+
     limit_cycle[0] = initial_guess
     equilibria[0] = initial_guess[:-1]
     guess = initial_guess[:-1]
     prev_cycle = initial_guess
+
     for index,par in enumerate(param_values[1:]):
         guess = equilibria[index]
-        equilibrias = fsolve(lambda u:modified_hopf(0,u,par), guess)
+        equilibrias = fsolve(lambda u:f(0,u,par), guess)
         equilibria[index+1] = equilibrias
-        print(equilibrias)
+        #print(equilibrias)
 
     for index,par in enumerate(param_values[1:]):
         sol, cycle = limit_cycle_finder(f,prev_cycle,phase_condition,par)
         limit_cycle[index+1] = sol 
+        prev_cycle = sol
+        print(prev_cycle)
+    
+    #Could combine loops?
 
-        if len(limit_cycle[1,:]) > 3:
-            cycle1 = limit_cycle[index-1]
-            cycle2 = limit_cycle[index]
-            #diff = cycle2 - cycle1
-            guess = 2*prev_cycle - limit_cycle[index-2] 
-            prev_cycle = guess
-            print(prev_cycle)
-        else:
-            prev_cycle = sol 
-
-    return limit_cycle[1:,:], param_values[1:], equilibria
-
-
-limit_cycle, param_values, eq = natural_continuation2(modified_hopf, [1.4,1,30], 1000, [2,-1], phase_condition)
-plotter(param_values, limit_cycle, eq)
+    return limit_cycle[1:,:], param_values[1:], equilibria[1:,:]
 
 
 
@@ -157,7 +164,7 @@ def pseudo_method(myode,current,guess,phase_condition): #current = [u_0,u_1,T_1,
         estimate_1 = U[:-1]
         param = U[-1]
 
-        shooting = shoot(ode(myode,param), estimate_1,phase_condition)
+        shooting = shoot(myode, estimate_1,phase_condition)
         print(shooting)
         pal = pseudo_arc_length_eq(current,guess,0.1)
         print(pal)
@@ -167,9 +174,7 @@ def pseudo_method(myode,current,guess,phase_condition): #current = [u_0,u_1,T_1,
     return corrected_sol #This is the known solution with the limit cylce inducing parameter
 
 
-# if __name__ == "__main__":
-#     main()
-
-
+if __name__ == "__main__":
+   main()
 
 
