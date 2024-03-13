@@ -3,8 +3,6 @@ import matplotlib.pyplot as plt
 import sys
 import math
 from Equations_Functions import system_of_odes, dx_dt, lokta_volterra
-import numpy as np
-import math
 import warnings
 
 def euler_step(f,x0,t0,h, **kwargs):

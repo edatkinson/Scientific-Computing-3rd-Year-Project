@@ -26,16 +26,10 @@ def phase_condition(ode,u0,pars):
     return np.array([ode(0,u0,pars)[0]])
 
 def shoot(f, phase_cond):
-    """
-    Returns a function G for solving a boundary value problem using the shooting method.
 
-    :param f: System of ODEs function.
-    :param phase_cond: Boundary conditions function.
-    :returns: Function G calculating differences between actual and guessed boundary conditions.
-    """
     def J(u0,T,pars):
         # Solve ODE system using Solve IVP 
-        t = np.linspace(0, T, 100)
+        #t = np.linspace(0, T, 100)
         _,sol = solve_ode(f, (0,T), u0, h=0.01,method='rk4',pars=pars)
         final_sol = sol[-1, :]
         #print(final_sol)
@@ -84,17 +78,17 @@ def phase_portrait_plotter(sol):
 
 
 def main():
-    # lokta_pars = (1,0.1,0.1)
-    # orbit, cycle1 = limit_cycle_finder(lokta_volterra, [0.1,0.1,30],phase_condition,lokta_pars)
-    # print('The true values of the Lokta-Volterra orbit:', orbit)
-    # fig1 = phase_portrait_plotter(cycle1) #plot the limit cycle
-    # plt.show()
+    lokta_pars = (1,0.1,0.1)
+    orbit, cycle1 = limit_cycle_finder(lokta_volterra, [0.1,0.1,30],phase_condition,lokta_pars)
+    print('The true values of the Lokta-Volterra orbit:', orbit)
+    fig1 = phase_portrait_plotter(cycle1) #plot the limit cycle
+    plt.show()
 
     hopf_pars = (0.9,-1)
-    orbit, cycle2 = limit_cycle_finder(hopf, [1,0,7],phase_condition,hopf_pars)
+    orbit, cycle2 = limit_cycle_finder(hopf, [1,0.1,7],phase_condition,hopf_pars)
     print('The true values of the Hopf orbit:', orbit)
     fig2 = phase_portrait_plotter(cycle2) #plot the limit cycle
-    #plt.show()
+    plt.show()
 
     t = np.linspace(0,10,100)
     beta,sigma = hopf_pars

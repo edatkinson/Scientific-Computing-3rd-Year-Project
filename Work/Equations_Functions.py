@@ -42,7 +42,7 @@ def modified_hopf(t,u, pars):
 
     :returns: A numpy array of length 2 containing the time derivatives of the state variables.
     """
-    (u1, u2) = u
+    u1, u2 = u
     du1dt = (pars * u1) - u2 + u1 * (u1**2 + u2**2) - (u1 * (u1**2 + u2**2)**2)
     du2dt = u1 + (pars * u2) + u2 * (u1**2 + u2 ** 2)- (u2 * (u1**2 + u2 ** 2)**2)
     return np.array([du1dt, du2dt])

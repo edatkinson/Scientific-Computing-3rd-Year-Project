@@ -7,6 +7,9 @@ from new_ode_solver import solve_ode
 
 import warnings
 from Equations_Functions import lokta_volterra, hopf, hopf_3dim, modified_hopf
+
+#Shoots using the scipy solve_ivp function
+
 '''
 To find limit cycles, we must solve the periodic boundary value problem (BVP)
 Solve u(0) - u(T) = 0, = u0 - F(u0, T) = 0.
