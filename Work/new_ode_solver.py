@@ -12,6 +12,7 @@ def euler_step(f,x0,t0,h, **kwargs):
 
 def rk4_step(f,x0,t0,h, **kwargs):
     k1 = f(t0,x0,**kwargs)
+    # print(x0.shape)
     k2 = f(t0+h/2, x0+h*(k1/2),**kwargs)
     k3 = f(t0+h/2,x0+h*(k2/2),**kwargs)
     k4 = f(t0+h,x0+h*k3,**kwargs)
@@ -58,7 +59,7 @@ def solve_ode(f, t_span, y0, h,method='rk4', **kwargs):
         elif method == 'rk4':
             y[:, i], _ = rk4_step(f, y[:, i-1], t[i-1], dt, **kwargs)
 
-
+        
     return t, y.T  # Transpose y to match Sol.y structure
 
 
@@ -70,7 +71,7 @@ def main():
     pars = (1,0.1,0.1) #Vary these to see changes in the plot
 
     t, x = solve_ode(lokta_volterra, (0,100), np.array([1,2]),method='rk4',h=0.01,pars=pars)
-
+    print(x)
     plt.plot(t, x[:, 0], label='Prey')
     plt.plot(t, x[:, 1], label='Predator')
     plt.xlabel('Time')

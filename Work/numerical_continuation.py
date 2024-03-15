@@ -1,11 +1,11 @@
 
 from new_ode_solver import solve_ode
-#from bvp_and_shooting import phase_condition, shoot, limit_cycle_finder
-from mybvp import phase_condition, shoot, limit_cycle_finder
+from bvp_and_shooting import phase_condition, shoot, limit_cycle_finder
+#from mybvp import phase_condition, shoot, limit_cycle_finder
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.optimize import fsolve
-from Equations_Functions import hopf, modified_hopf
+from Equations_Functions import hopf, modified_hopf, lokta_volterra
 import warnings 
 from numpy import linalg as LA
 
@@ -24,33 +24,7 @@ results = continuation(
 
 
 
-def main():
-    
-    # steps = 20
-    # initial_guess = np.array([1, 1.0, 4])    #np.array([0.2,0.5,35]) works!
-    # param_bounds = [2,-1]
 
-    # limit_cycle, param_values, eq = natural_continuation(
-    #     modified_hopf, 
-    #     initial_guess, 
-    #     steps, 
-    #     param_bounds, 
-    #     phase_condition)
-
-    # # #Bifurcation diagram of Limit cycle and equilibria
-    # plotter(param_values, limit_cycle, eq)
-
-
-    # ####Pseudo Arc Length Method #####
-    max_par = -1
-    par_step = 100
-    initial_par = 2
-    sol =  pseudo_method(modified_hopf, np.array([1.41, 0, 6.28,2]), initial_par, phase_condition, max_par,par_step)
-    print(sol)
-    plt.plot(sol[:,3], sol[:,0], label='u0')
-    plt.plot(sol[:,3], sol[:,1], label='u1')
-    plt.legend()
-    plt.show()
 
 
 
@@ -145,54 +119,91 @@ def natural_continuation(f,initial_guess,steps,param_bounds,phase_condition):
 #(3) Predict the Solution: v(i+1) = v(i) + Delta
 #(4) Stack the pseudo arc length equation 
 
-def secant(v0,v1):
-    return v1 - v0  
 
-def pseudo_arclength_equation(u0,u1,par0,par1):
-    # par0 = np.array(par0).flatten()
-    # par1 = np.array(par1).flatten()
-    # print(par0,par1)
-    v0 = np.append(u0[:-1],par0)
-    v1 = np.append(u1[:-1],par1)
-    #print(v0,v1)
-
-    delta = secant(v0,v1)
-
-    approx = v1 - secant(v0, v1)
-
-    return approx, np.dot(secant(v0,v1), approx)
+def calculate_par_step(min_par, max_par, num_steps):
+    return (max_par - min_par) / num_steps
 
 
-def pseudo_method(f, u0_guess, initial_par,phase_condition,max_par,par_step): #guesses: [u,T]
-    u0 = u0_guess # [u,T,param]
-    par_1 = initial_par
-    
-    par_list = np.linspace(par_1,max_par,par_step) #List of parameter to iterate over
+def find_initial_sols(f, u0_guess, phase_condition,par_index, par0,par_step):
+    #par0 = par0[0]
+    u1,_ = limit_cycle_finder(f,u0_guess,phase_condition,par0)
+    u1 = np.append(u1,par0[par_index])
+    print(par0[par_index])
+    #print(u1)
+    par0[par_index] += par_step
+    u2,_ = limit_cycle_finder(f,u1[:-1],phase_condition,par0)
+    u2 = np.append(u2,par0[par_index])
+    print(u2)
+    return u1, u2
 
-    u1,_ = limit_cycle_finder(f,u0[:-1],phase_condition,par_1)
 
-    u2,_ = limit_cycle_finder(f,u1,phase_condition,par_list[1])
 
-    u1 = np.append(u1,par_1)
-    u2 = np.append(u2,par_list[1])
-    
-    sol = np.zeros((len(par_list)+1,len(u0_guess)))
-    sol[0] = u1
-    sol[1] = u2
-    G = shoot(f,phase_condition)
+def predict(u_current,u_previous):
+    delta_u = u_current - u_previous
+    u_approx = u_current + delta_u
+    return [u_approx, delta_u]
 
-    for index,par in enumerate(par_list[1:]):
-        approx, pseudo_arc_length = pseudo_arclength_equation(sol[index],sol[index+1], par_list[index], par_list[index+1])
+def corrector(ode,u,par_index,par_array,u_pred,delta_u): #u is the var to solve for
+    par_array[par_index] = u[-1]
+    G = shoot(ode,phase_condition)
+    shoot_res =  G(u[:-2], u[-2],par_array)
+    pAL = np.dot(u - u_pred, delta_u)
+    return np.append(shoot_res, pAL)
 
-        G_o = G(sol[index][:-2], sol[index][-2],par) #G = 
+def pseudo_continuation(ode,x0,par_array,par_index,par_step,max_steps):
+    sol = np.zeros((len(x0)+1,max_steps+1))
 
-        f_new = np.hstack((G_o, pseudo_arc_length))
+    u_old, u_current = find_initial_sols(ode, x0, phase_condition, par_index,par_array,par_step)
+    #print(u_old,u_current)
+    sol[:,0] =  u_old
+    #print(u_old.shape, u_current.shape)
 
-        correct_sol = fsolve(lambda nu: f_new, approx, xtol=1e-6, epsfcn=1e-6)
-
-        sol[index+2] = correct_sol
-
+    for i in range(max_steps):
+        sol[:,i+1] = u_current
+        u_pred, delta_u = predict(u_current,u_old)
+        u_corrected = fsolve(lambda u: corrector(ode,u,par_index,par_array,u_pred,delta_u), u_pred, xtol=1e-6, epsfcn=1e-6)
+        u_old = u_current
+        u_current = u_corrected
+        #print(u_current)
     return sol
+
+def main():
+    
+    # steps = 20
+    # initial_guess = np.array([1, 1.0, 4])    #np.array([0.2,0.5,35]) works!
+    # param_bounds = [2,-1]
+
+    # limit_cycle, param_values, eq = natural_continuation(
+    #     modified_hopf, 
+    #     initial_guess, 
+    #     steps, 
+    #     param_bounds, 
+    #     phase_condition)
+
+    # # #Bifurcation diagram of Limit cycle and equilibria
+    # plotter(param_values, limit_cycle, eq)
+
+
+    # ####Pseudo Arc Length Method #####
+
+
+    max_steps = 50
+    x0 = np.array([1,1.3,6.2])
+    par_array = [-1.0]
+    par_index = 0
+    par_step = 0.1
+
+    sol = pseudo_continuation(modified_hopf, x0, par_array, par_index, par_step,max_steps)
+    #print(sol)
+    
+    plt.plot(sol[3,:],sol[0,:], label='u1')
+    plt.plot(sol[3,:],sol[1,:], label='u2')
+    plt.xlabel('Parameter', fontsize=12)
+    plt.ylabel('u', fontsize=12)
+    plt.title('Pseudo Arc Length Method', fontsize=14)
+    plt.legend(fontsize=12)
+    plt.grid(True)
+    plt.show()
 
 
 if __name__ == "__main__":

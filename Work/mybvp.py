@@ -44,6 +44,17 @@ def orbit_my(ode, uinitial, duration,pars):
     #print(sol[:,-1])
     return sol
 
+def limit_cycle(ode,estimate,phase_condition,pars):
+    J = shoot(ode,phase_condition)
+    u0 = estimate[:-1]
+    T = estimate[-1]
+    pars = pars
+    #root finding problem
+    result = fsolve(lambda estimate: J(u0,T, pars),estimate, xtol=1e-6, epsfcn=1e-6)
+    #Isolated_Orbit is the numerical approximation of the limit cycle ODE
+
+    return result
+
 def limit_cycle_finder(ode, estimate, phase_condition, pars):
     J = shoot(ode,phase_condition)
     #root finding problem
