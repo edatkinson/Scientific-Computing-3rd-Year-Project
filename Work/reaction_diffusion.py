@@ -9,7 +9,7 @@ class BoundaryCondition:
         self.value = value
 
 class DiffusionProblem:
-    def __init__(self, N, a, b, D, q, initial_condition, boundary_conditions, time_span, t_eval, method='explicit_euler'):
+    def __init__(self, N, a, b, D, q, initial_condition, boundary_conditions, time_span, t_eval, method):
         self.N = N
         self.a = a
         self.b = b
@@ -115,10 +115,13 @@ def solve_diffusion(problem):
 
 
 
-def animate_solution(x, t_eval, U):
+def animate_solution(x, t_eval, U,title):
     fig, ax = plt.subplots()
     line, = ax.plot(x, U[0], color='blue')
-
+    plt.title(title)
+    plt.xlabel('x')
+    plt.ylabel('U(x,t)')
+    plt.grid(True)
     def update(frame):
         line.set_ydata(U[frame])
         line.set_xdata(x)  
@@ -126,6 +129,7 @@ def animate_solution(x, t_eval, U):
 
     ani = animation.FuncAnimation(fig, update, frames=len(t_eval), blit=True)
     plt.show()
+
 
 def plot_solution(x, t_eval, U):
     plt.figure(figsize=(10, 6))
@@ -137,12 +141,15 @@ def plot_solution(x, t_eval, U):
     plt.title('Diffusion Solution')
     plt.show()
 
+
 def main():
     a = 0
     b = 1
     D = 1
     N = 20
-    q = lambda t, x, U, a, b: 0#U * np.sin(x)
+    T = 1
+
+    q = lambda t, x, U, a, b: 0 #U * np.sin(x)
 
     def initial_condition(x):
         return np.sin(np.pi * x)
@@ -153,7 +160,7 @@ def main():
     def right_boundary_condition(t):
         return 1
 
-    time_span = (0, 3)
+    time_span = (0, T)
     dt = 0.00125
     #value of dt where explicit euler method is stable critera:
     #dt <= dx**2/(2*D)
@@ -165,12 +172,16 @@ def main():
     boundary_conditions = (BoundaryCondition('dirichlet', value=left_boundary_condition(0)),
                            BoundaryCondition('neumann', value=right_boundary_condition(0)))
 
-    problem = DiffusionProblem(N,a, b, D, q, initial_condition, boundary_conditions, time_span, t_eval)
-
-    x, t_eval, U = solve_diffusion(problem)
+    problem_ivp = DiffusionProblem(N,a, b, D, q, initial_condition, boundary_conditions, time_span, t_eval, method='solve_ivp')
+    problem_euler = DiffusionProblem(N,a, b, D, q, initial_condition, boundary_conditions, time_span, t_eval, method='explicit_euler')
     
-    animate_solution(x, t_eval, U)
-    plt.show()
+    x = np.linspace(a, b, N+1)
+    x_ivp, t_eval_ivp, U_ivp = solve_diffusion(problem_ivp)
+    x_euler, t_eval_euler, U_euler = solve_diffusion(problem_euler)
 
+    animate_solution(x_ivp, t_eval_ivp, U_ivp, "IVP Method")
+    
+    animate_solution(x_euler, t_eval_euler, U_euler, "Explicit Euler Method")
+    
 if __name__ == '__main__':
     main()
