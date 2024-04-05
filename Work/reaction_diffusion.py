@@ -245,28 +245,61 @@ def animate_solution(x, t_eval, U,title):
     plt.show()
 
 
-def plot_solution(x, t_eval, U):
-    plt.figure(figsize=(10, 6))
-    for i in range(len(t_eval)):
-        plt.plot(x, U[i], label=f't={t_eval[i]:.2f}')
-    plt.xlabel('x')
-    plt.ylabel('U')
-    plt.legend()
-    plt.title('Diffusion Solution')
+from mpl_toolkits.mplot3d import Axes3D  # This import registers the 3D projection
+
+def plot_multiple_solutions_3d(solution_sets, titles):
+    """
+    Plots multiple 3D solutions for comparison.
+
+    :param solution_sets: A list of tuples, each containing (x, t_eval, U) for a solution.
+    :param titles: A list of titles for each subplot.
+    """
+    n = len(solution_sets)  # Number of solutions to plot
+    cols = 2  # You can adjust this based on how you want to display
+    rows = (n + 1) // cols  # Calculate rows needed
+
+    fig = plt.figure(figsize=(12, 6))
+
+    for i, ((x, t_eval, U), title) in enumerate(zip(solution_sets, titles)):
+        #ax = fig.add_subplot(rows, cols, i + 1, projection='3d')
+        ax = fig.add_subplot(1, n, i + 1, projection='3d')
+        
+        # Ensure t_eval is the correct length
+        t_eval = np.linspace(t_eval[0], t_eval[-1], len(U))
+
+        # Generate meshgrid
+        T, X = np.meshgrid(t_eval, x)  # Note the order to match U's shape
+
+        # Ensure U is transposed if necessary to match the shapes of X and T
+        U_correct_shape = U.T if U.shape[0] == len(x) else U
+        if U_correct_shape.shape != X.shape:
+            U_correct_shape = U_correct_shape.T 
+
+        # Plot the surface
+        surf = ax.plot_surface(X, T, U_correct_shape, cmap='viridis', edgecolor='none')
+
+        # Setting labels
+        ax.set_xlabel('Space domain (x)')
+        ax.set_ylabel('Time domain (t)')
+        ax.set_zlabel('U(x,t)')
+        ax.set_title(title)
+
+    fig.colorbar(surf, ax=fig.axes, shrink=0.5, aspect=5, location='bottom')
+    #plt.tight_layout()
     plt.show()
 
 
 def main():
     a = 0
     b = 2
-    D = 2
+    D = 0.5
     N = 50
     T = 0.5
 
-    q = lambda t, x, U, a, b: x #U * np.sin(x)
+    q = lambda t, x, U, a, b: 0*x #U * np.sin(x)
 
     def initial_condition(x):
-        return 0.5 * x*(2-x) + np.sin(np.pi*x)
+        return 0.5 * x*(2-x) 
 
     def left_boundary_condition(t):
         return 1
@@ -285,8 +318,8 @@ def main():
 
     t_eval = np.arange(*time_span, dt)
 
-    boundary_conditions = (BoundaryCondition('dirichlet', value=left_boundary_condition(0)),
-                           BoundaryCondition('dirichlet', value=right_boundary_condition(0)))
+    boundary_conditions = (BoundaryCondition('neumann', value=left_boundary_condition(0)),
+                           BoundaryCondition('neumann', value=right_boundary_condition(0)))
 
     #IVP Method
     problem_ivp = DiffusionProblem(N,a, b, D, q, initial_condition, boundary_conditions, time_span, t_eval, method='solve_ivp')
@@ -298,6 +331,10 @@ def main():
     x = np.linspace(a, b, N+1)
     x_ivp, t_eval_ivp, U_ivp = solve_diffusion(problem_ivp)
     x_euler, t_eval_euler, U_euler = solve_diffusion(problem_euler)
+
+    solution_sets = [(x_ivp, t_eval_ivp, U_ivp), (x_euler, t_eval_euler, U_euler), (x, t, U)]
+    titles = ['IVP Method', 'Explicit Euler Method', 'Implicit Euler Method']
+    plot_multiple_solutions_3d(solution_sets, titles)
 
     animate_solution(x_ivp, t_eval_ivp, U_ivp, "IVP Method")
     
