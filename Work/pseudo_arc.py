@@ -1,6 +1,4 @@
-# I'll write a natural parameter continuation method using the approach outlined in the provided code, 
-# but simplify it to use a single ODE system, which will be the modified Hopf bifurcation system as an example.
-# This method will track equilibria and limit cycles as parameters change.
+
 
 import numpy as np
 import matplotlib.pyplot as plt
