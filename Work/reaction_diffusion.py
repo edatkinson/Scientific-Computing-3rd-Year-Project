@@ -2,6 +2,11 @@ import numpy as np
 from scipy.integrate import solve_ivp
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
+from scipy.sparse import diags
+from scipy.sparse.linalg import spsolve
+from scipy.optimize import fsolve
+from scipy.linalg import solve_banded
+
 
 class BoundaryCondition:
     def __init__(self, bc, value):
@@ -35,10 +40,11 @@ def diffusion_rhs(t, U, D, q, a, b, N, left_BC, right_BC):
     # Apply boundary conditions
     if left_BC.bc == 'dirichlet':
         U[0] = left_BC.value
+        
     elif left_BC.bc == 'neumann':
-        dUdt[0] = left_BC.value
-        #dUdt[0] = (U[1] - U[0]) / dx  
-        #dUdt[0] = D * (U[1] - U[0]) / dx**2 + left_BC.value
+
+        dUdt[0] = D * (U[1] - U[0] + dx * left_BC.value) / dx**2
+
     elif left_BC.bc == 'robin':
         dUdt[0] = (U[1] - U[0]) / dx + left_BC.value * (U[0] - a)
 
@@ -46,9 +52,8 @@ def diffusion_rhs(t, U, D, q, a, b, N, left_BC, right_BC):
         U[N] = right_BC.value
 
     elif right_BC.bc == 'neumann':
-        dUdt[N] = right_BC.value 
-        #dUdt[N] = (U[N] - U[N-1]) / dx 
-        #dUdt[N] = D * (U[N] - U[N-1]) / dx**2 + right_BC.value
+        dUdt[-1] = D * (right_BC.value * dx - U[-1] + U[-2]) / dx**2
+
     elif right_BC.bc == 'robin':
         dUdt[N] = (U[N] - U[N-1]) / dx + right_BC.value * (b - U[N])
 
@@ -60,71 +65,122 @@ def explicit_euler_step(U, D, q, dt, a, b, N, left_BC, right_BC):
     dx = (b - a) / N
     x = np.linspace(a, b, N+1)
 
-    # Apply boundary conditions
+    # Apply Left boundary conditions
     if left_BC.bc == 'dirichlet':
         #U_new[0] = left_BC.value
         U[0] = left_BC.value
+    elif left_BC.bc == 'neumann':
+        U_new[0] = U[0] + dt * D * (U[1] - U[0]) / dx**2 + (2 * dt * D * left_BC.value) / dx
+    elif left_BC.bc == 'robin':
+        U_new[0] = U[0] + dt * (left_BC.value(0) * (U[0] - a))
+
 
     for i in range(1, N):
         U_new[i] = U[i] + dt * D * (U[i+1] - 2*U[i] + U[i-1]) / dx**2 + dt * q(0, x[i], U[i], a, b)
-    
-    if left_BC.bc == 'neumann':
-        #U_new[0] = U[0] + dt*D/dx**2 * (U[1] -2* U[0] + left_BC.value)
-        #U_new[0] = U[0] + dt * D / dx * (left_BC.value)
-        U_new[0] = U[0] + dt * D / dx**2 * (U[1] - U[0]) + dt * left_BC.value / dx
-    elif left_BC.bc == 'robin':
-        U_new[0] = U[0] + dt * (left_BC.value(0) * (U[0] - a))
-    
+
+    # Apply Right boundary conditions
     if right_BC.bc == 'dirichlet':
         U_new[N] = right_BC.value
+
     elif right_BC.bc == 'neumann':
-        #U_new[N] = U[N] + D*dt / dx * right_BC.value
-        #U_new[N] = U[N] + dt*D/dx**2 * (right_BC.value - 2*U[N] + U[N-1])
-        U_new[N] = U[N] + dt * D / dx**2 * (U[N-1] - U[N]) + dt * right_BC.value / dx
+        U_new[N] = U[N] + dt * D * (2*dx*right_BC.value + U[N-1] - U[N]) / dx**2 #+  dt * q(0, x[N], U[N], a, b)
+        #U_new[-1] = U[-1] + dt * D * (U[-1] - U[-2]) / dx**2 + (2 * dt * D * right_BC.value) / dx
+
     elif right_BC.bc == 'robin':
         U_new[N] = U[N] + dt * (right_BC.value(0) * (b - U[N]))
 
     return U_new
+
+#using np.linalg.solve
+# def diffusion_implicit_euler(D, q, bc_left, bc_right, u0, dt, dx, T, a, b): 
+#     Nt = int(T/dt) + 1  # Number of time steps
+#     Nu = int((b - a)/dx) + 1  # Number of spatial points
+#     u = np.zeros((Nt, Nu))
+#     x = np.linspace(a, b, Nu)  # Spatial grid
+#     u[0] = u0(x)  # Applying the initial condition
+
+#     # Adjusted matrix A for Implicit Euler
+#     r = D * dt / dx**2
+#     A = np.diag((1 + 2*r) * np.ones(Nu)) - np.diag(r * np.ones(Nu - 1), -1) - np.diag(r * np.ones(Nu - 1), 1)
+
+#     # Apply Dirichlet boundary conditions in A
+#     A[0, 0], A[-1, -1] = 1, 1
+#     A[0, 1], A[-1, -2] = 0, 0  # Ensuring no flux contribution from outside the domain
+
+#     for n in range(1, Nt):
+#         un = u[n-1]
+#         b = un   # RHS based on previous timestep, scaled by 1/dt
+
+#         # Add the contribution from the q term if it's not trivial
+#         b += q(n*dt, x, un, a, b) * dt  # q term scaled by dt for the implicit method
+
+#         # Apply boundary conditions
+#         if bc_left.bc == 'dirichlet':
+#             b[0] = bc_left.value
+#         elif bc_left.bc == 'neumann':
+#             A[0, 0] = -1 / dx
+#             A[0, 1] = 1 / dx
+#             b[0] += bc_left.value * dx / D  # Adjust for Neumann on the left
+
+#         if bc_right.bc == 'dirichlet':
+#             b[-1] = bc_right.value
+#         elif bc_right.bc == 'neumann':
+#             b[-1] += bc_right.value * dx / D  # Adjust for Neumann on the right
+
+#         # Solve the system for this timestep
+#         u[n] = np.linalg.solve(A, b)
+
+#     return u,x
+
 
 def diffusion_implicit_euler(D, q, bc_left, bc_right, u0, dt, dx, T, a, b):
     Nt = int(T/dt) + 1  # Number of time steps
     Nu = int((b - a)/dx) + 1  # Number of spatial points
     u = np.zeros((Nt, Nu))
     x = np.linspace(a, b, Nu)  # Spatial grid
-    u[0] = u0(x)  # Applying the initial condition
+    u[0, :] = u0(x)  # Applying the initial condition
 
-    # Adjusted matrix A for Implicit Euler
+    # Coefficient for diffusion term
     r = D * dt / dx**2
-    A = np.diag((1 + 2*r) * np.ones(Nu)) - np.diag(r * np.ones(Nu - 1), -1) - np.diag(r * np.ones(Nu - 1), 1)
 
-    # Apply Dirichlet boundary conditions in A
-    A[0, 0], A[-1, -1] = 1, 1
-    A[0, 1], A[-1, -2] = 0, 0  # Ensuring no flux contribution from outside the domain
+    # Define the function for fsolve
+    def solve_u_next(U_next, U_prev, n):
+        non_linear_term = q(n*dt, x, U_next, a, b)
+        # Construct the diffusion part using central difference (Laplacian)
+        diffusion_term = np.zeros_like(U_next)
+        diffusion_term[1:-1] = D * (U_next[:-2] - 2*U_next[1:-1] + U_next[2:]) / dx**2
+        
+        # Combine the terms and subtract from previous U to form residual for fsolve
+        F = U_next - U_prev - dt * (diffusion_term + non_linear_term)
+
+        # Apply Neumann BC correctly for the left boundary
+        if bc_left.bc == 'dirichlet':
+            F[0] = U_next[0] - bc_left.value
+        elif bc_left.bc == 'neumann':
+            # Use a backward difference for left boundary to maintain consistency
+            F[0] = (U_next[0] - U_next[1]) / dx - bc_left.value  
+
+        # Apply Neumann BC correctly for the right boundary
+        if bc_right.bc == 'dirichlet':
+            F[-1] = U_next[-1] - bc_right.value
+        elif bc_right.bc == 'neumann':
+            # Use a forward difference for right boundary to maintain consistency
+            F[-1] = (U_next[-1] - U_next[-2]) / dx - bc_right.value
+        
+        return F
 
     for n in range(1, Nt):
-        un = u[n-1]
-        b = un   # RHS based on previous timestep, scaled by 1/dt
+        U_prev = u[n-1, :]
+        # Use fsolve to find U_next
+        U_next_initial_guess = U_prev  # Initial guess for U_next
+        # Solve for U_next using fsolve
+        u[n, :], infodict, ier, mesg = fsolve(solve_u_next, U_next_initial_guess, args=(U_prev, n), full_output=True)
+        if ier != 1:
+            print(f"FSolve did not converge at time step {n}, message: {mesg}")
+            break
 
-        # Add the contribution from the q term if it's not trivial
-        b += q(n*dt, x, un, a, b) * dt  # q term scaled by dt for the implicit method
+    return u, x
 
-        # Apply boundary conditions
-        if bc_left.bc == 'dirichlet':
-            b[0] = bc_left.value
-        elif bc_left.bc == 'neumann':
-            A[0, 0] = -1 / dx
-            A[0, 1] = 1 / dx
-            b[0] += bc_left.value * dx / D  # Adjust for Neumann on the left
-
-        if bc_right.bc == 'dirichlet':
-            b[-1] = bc_right.value
-        elif bc_right.bc == 'neumann':
-            b[-1] += bc_right.value * dx / D  # Adjust for Neumann on the right
-
-        # Solve the system for this timestep
-        u[n] = np.linalg.solve(A, b)
-
-    return u
 
 
 def solve_diffusion(problem):
@@ -161,10 +217,10 @@ def solve_diffusion(problem):
     
     elif method == 'implicit_euler':
         dt = 0.01
-        U = diffusion_implicit_euler(D, q, boundary_conditions[0], boundary_conditions[1], initial_condition, dt, dx, time_span[1], a, b)
+        U,x = diffusion_implicit_euler(D, q, boundary_conditions[0], boundary_conditions[1], initial_condition, dt, dx, time_span[1], a, b)
 
     else:
-        raise ValueError("Invalid method. Choose 'explicit_euler' or 'solve_ivp'.")
+        raise ValueError("Invalid method. Choose 'explicit_euler' , 'solve_ivp' or implicit_euler.")
 
     return x, t_eval, U
 
@@ -174,8 +230,8 @@ def solve_diffusion(problem):
 def animate_solution(x, t_eval, U,title):
     fig, ax = plt.subplots()
     line, = ax.plot(x, U[0], color='blue')
-    plt.xlim(-0.5,2.5)
-    plt.ylim(-0.5,1.5)
+    ax.set_xlim(np.min(x)-0.5, np.max(x)+0.5)
+    ax.set_ylim(np.min(U), np.max(U)+0.5)
     plt.title(title)
     plt.xlabel('x')
     plt.ylabel('U(x,t)')
@@ -202,28 +258,29 @@ def plot_solution(x, t_eval, U):
 
 def main():
     a = 0
-    b = 1
-    D = 1
-    N = 20
-    T = 2
+    b = 2
+    D = 2
+    N = 50
+    T = 0.5
 
-    q = lambda t, x, U, a, b: 0*x #U * np.sin(x)
+    q = lambda t, x, U, a, b: x #U * np.sin(x)
 
     def initial_condition(x):
-        return np.sin(np.pi *(x-a)/(b-a))
+        return 0.5 * x*(2-x) + np.sin(np.pi*x)
 
     def left_boundary_condition(t):
         return 0
 
     def right_boundary_condition(t):
         return 1
+    
     dx = (b - a) / N
     time_span = (0, T)
     dt = 0.00125
     #value of dt where explicit euler method is stable critera:
     #dt <= dx**2/(2*D)
     dt_max = ((b-a)/N)**2/ (2 * D)
-    print(f'Using the Criterion to maintian stability for the Explicit Euler Method, the Maxium value of Delta T = {dt_max}')
+    print(f'Using the Criterion to maintian stability for the Explicit Euler Method, the Maxium value of Delta T = {dt_max}') 
     dt = 0.5*dt_max
 
     t_eval = np.arange(*time_span, dt)
@@ -246,13 +303,13 @@ def main():
     
     animate_solution(x_euler, t_eval_euler, U_euler, "Explicit Euler Method")
 
-    
-
     animate_solution(x, t, U, 'Implicit Euler Method')
 
 
 if __name__ == '__main__':
     main()
+
+#TODO: Add IMEX ability from week 22
 
 
 # Simulates Exercise 1 analytical sol from week 20
