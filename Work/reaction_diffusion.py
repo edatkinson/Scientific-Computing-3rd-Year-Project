@@ -269,7 +269,7 @@ def main():
         return 0.5 * x*(2-x) + np.sin(np.pi*x)
 
     def left_boundary_condition(t):
-        return 0
+        return 1
 
     def right_boundary_condition(t):
         return 1

@@ -25,10 +25,6 @@ results = continuation(
 
 
 
-
-
-
-
 def plotter(param_values, cycles, eq):
     plt.figure(figsize=(8, 6))
     plt.plot(param_values, cycles[:,2], label='T')
@@ -128,8 +124,7 @@ def find_initial_sols(f, u0_guess, phase_condition,par_index, par0,par_step):
     #par0 = par0[0]
     u1,_ = limit_cycle_finder(f,u0_guess,phase_condition,par0)
     u1 = np.append(u1,par0[par_index])
-    print(par0[par_index])
-    #print(u1)
+    print(u1)
     par0[par_index] += par_step
     u2,_ = limit_cycle_finder(f,u1[:-1],phase_condition,par0)
     u2 = np.append(u2,par0[par_index])
@@ -150,60 +145,112 @@ def corrector(ode,u,par_index,par_array,u_pred,delta_u): #u is the var to solve 
     pAL = np.dot(u - u_pred, delta_u)
     return np.append(shoot_res, pAL)
 
-def pseudo_continuation(ode,x0,par_array,par_index,par_step,max_steps):
-    sol = np.zeros((len(x0)+1,max_steps+1))
+# def pseudo_continuation(ode,x0,par_array,par_index,par_step,max_steps):
+#     sol = np.zeros((len(x0)+1,max_steps+1))
 
-    u_old, u_current = find_initial_sols(ode, x0, phase_condition, par_index,par_array,par_step)
-    #print(u_old,u_current)
-    sol[:,0] =  u_old
-    #print(u_old.shape, u_current.shape)
+#     u_old, u_current = find_initial_sols(ode, x0, phase_condition, par_index,par_array,par_step)
+#     #print(u_old,u_current)
+#     sol[:,0] =  u_old
+#     #print(u_old.shape, u_current.shape)
 
-    for i in range(max_steps):
-        sol[:,i+1] = u_current
-        u_pred, delta_u = predict(u_current,u_old)
-        u_corrected = fsolve(lambda u: corrector(ode,u,par_index,par_array,u_pred,delta_u), u_pred, xtol=1e-6, epsfcn=1e-6)
+#     for i in range(max_steps):
+#         sol[:,i+1] = u_current
+#         u_pred, delta_u = predict(u_current,u_old)
+#         u_corrected = fsolve(lambda u: corrector(ode,u,par_index,par_array,u_pred,delta_u), u_pred, xtol=1e-6, epsfcn=1e-6)
+#         u_old = u_current
+#         u_current = u_corrected
+#         #print(u_current)
+#     return sol
+
+
+def pseudo_continuation(ode, x0, par_array, par_index, par_step, min_par, max_par, max_steps): #works with bvp & shooting
+    # Calculate the correct step size to ensure we move from 2 to -1
+    # Note: par_step is provided, but we ensure it's negative for decreasing direction
+    par_step = -abs(par_step) if max_par > min_par else abs(par_step)
+
+    sol = np.zeros((len(x0) + 1, max_steps + 1))
+
+    u_old, u_current = find_initial_sols(ode, x0, phase_condition, par_index, par_array[:], par_step)
+    sol[:, 0] = u_old
+
+    for i in range(1, max_steps + 1):
+        if (par_step < 0 and par_array[par_index] + par_step < min_par) or \
+           (par_step > 0 and par_array[par_index] + par_step > max_par):
+            print("Parameter boundary reached or exceeded.")
+            break
+
+        par_array[par_index] += par_step
+        u_pred, delta_u = predict(u_current, u_old)
+
+        u_corrected = fsolve(lambda u: corrector(ode, u, par_index, par_array, u_pred, delta_u), u_pred, xtol=1e-6, epsfcn=1e-6)
+        u_corrected = np.append(u_corrected[:-1], par_array[par_index])  # Ensure the last value is the parameter
+
         u_old = u_current
         u_current = u_corrected
-        #print(u_current)
-    return sol
+        sol[:, i] = u_current
+
+    return sol[:, :i+1] 
+
+
 
 def main():
     
-    # steps = 20
-    # initial_guess = np.array([1, 1.0, 4])    #np.array([0.2,0.5,35]) works!
-    # param_bounds = [2,-1]
+    steps = 20
+    initial_guess = np.array([1, 1.0, 4])    #np.array([0.2,0.5,35]) works with mybvp
+    param_bounds = [2,-1]
 
-    # limit_cycle, param_values, eq = natural_continuation(
-    #     modified_hopf, 
-    #     initial_guess, 
-    #     steps, 
-    #     param_bounds, 
-    #     phase_condition)
+    limit_cycle, param_values, eq = natural_continuation(
+        modified_hopf, 
+        initial_guess, 
+        steps, 
+        param_bounds, 
+        phase_condition)
 
-    # # #Bifurcation diagram of Limit cycle and equilibria
-    # plotter(param_values, limit_cycle, eq)
+    # #Bifurcation diagram of Limit cycle and equilibria
+    plotter(param_values, limit_cycle, eq)
 
 
     # ####Pseudo Arc Length Method #####
 
 
-    max_steps = 50
-    x0 = np.array([1,1.3,6.2])
-    par_array = [-1.0]
-    par_index = 0
-    par_step = 0.1
+    # max_steps = 50
+    # x0 = np.array([1,1.3,6.2])
+    # par_array = [2.0]
+    # par_index = 0*
+    # par_step = 0.1
 
-    sol = pseudo_continuation(modified_hopf, x0, par_array, par_index, par_step,max_steps)
-    #print(sol)
+    # sol = pseudo_continuation(modified_hopf, x0, par_array, par_index, par_step,max_steps)
+    # #print(sol)
     
-    plt.plot(sol[3,:],sol[0,:], label='u1')
-    plt.plot(sol[3,:],sol[1,:], label='u2')
-    plt.xlabel('Parameter', fontsize=12)
-    plt.ylabel('u', fontsize=12)
-    plt.title('Pseudo Arc Length Method', fontsize=14)
-    plt.legend(fontsize=12)
-    plt.grid(True)
-    plt.show()
+    # plt.plot(sol[3,:],sol[0,:], label='u1')
+    # plt.plot(sol[3,:],sol[1,:], label='u2')
+    # plt.xlabel('Parameter', fontsize=12)
+    # plt.ylabel('u', fontsize=12)
+    # plt.title('Pseudo Arc Length Method', fontsize=14)
+    # plt.legend(fontsize=12)
+    # plt.grid(True)
+    # plt.show()
+
+    # max_steps = 50
+    # x0 = np.array([3.4, 3.2, 6.2])
+    # par_array = [2]  # Start parameter value
+    # par_index = 0
+    # par_step = -0.1  # Ensure the step is negative for decreasing
+    # min_par = -1
+    # max_par = 2
+
+    # sol = pseudo_continuation(modified_hopf, x0, par_array, par_index, par_step, min_par, max_par, max_steps)
+    # print(sol)
+    # plt.plot(sol[3, :], sol[0, :], label='u1')
+    # plt.plot(sol[3, :], sol[1, :], label='u2')
+    # plt.xlabel('Parameter', fontsize=12)
+    # plt.xlim(min_par, max_par)
+    # plt.ylabel('u', fontsize=12)
+    # plt.title('Pseudo Arc Length Method', fontsize=14)
+    # plt.legend(fontsize=12)
+    # plt.grid(True)
+    # plt.show()
+
 
 
 if __name__ == "__main__":
