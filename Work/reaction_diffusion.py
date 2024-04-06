@@ -4,8 +4,10 @@ import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 from scipy.sparse import diags
 from scipy.sparse.linalg import spsolve
-from scipy.optimize import fsolve
+from scipy.optimize import root
 from scipy.linalg import solve_banded
+from matplotlib.animation import FuncAnimation
+import time
 
 
 class BoundaryCondition:
@@ -32,10 +34,9 @@ def diffusion_rhs(t, U, D, q, a, b, N, left_BC, right_BC):
 
     x = np.linspace(a, b, N+1)
     dx = x[1] - x[0]
-
     # Interior points
     for i in range(1, N):
-        dUdt[i] = D * (U[i+1] - 2*U[i] + U[i-1]) / dx**2 + q(0, x[i], U[i], a, b)
+        dUdt[i] = D * (U[i+1] - 2*U[i] + U[i-1]) / dx**2 + q(t, x[i], U[i])
 
     # Apply boundary conditions
     if left_BC.bc == 'dirichlet':
@@ -59,12 +60,12 @@ def diffusion_rhs(t, U, D, q, a, b, N, left_BC, right_BC):
 
     return dUdt
 
-def explicit_euler_step(U, D, q, dt, a, b, N, left_BC, right_BC):
+def explicit_euler_step(U, D, q, dt, a, b, N, left_BC, right_BC,T):
     U_new = np.zeros_like(U)
-
+    
     dx = (b - a) / N
     x = np.linspace(a, b, N+1)
-
+    t = np.linspace(0, T, N+1)
     # Apply Left boundary conditions
     if left_BC.bc == 'dirichlet':
         #U_new[0] = left_BC.value
@@ -76,7 +77,8 @@ def explicit_euler_step(U, D, q, dt, a, b, N, left_BC, right_BC):
 
 
     for i in range(1, N):
-        U_new[i] = U[i] + dt * D * (U[i+1] - 2*U[i] + U[i-1]) / dx**2 + dt * q(0, x[i], U[i], a, b)
+        #introduce t into q
+        U_new[i] = U[i] + dt * D * (U[i+1] - 2*U[i] + U[i-1]) / dx**2 + dt * q(t[i], x[i], U_new[i])
 
     # Apply Right boundary conditions
     if right_BC.bc == 'dirichlet':
@@ -91,46 +93,81 @@ def explicit_euler_step(U, D, q, dt, a, b, N, left_BC, right_BC):
 
     return U_new
 
-#using np.linalg.solve
-# def diffusion_implicit_euler(D, q, bc_left, bc_right, u0, dt, dx, T, a, b): 
-#     Nt = int(T/dt) + 1  # Number of time steps
-#     Nu = int((b - a)/dx) + 1  # Number of spatial points
-#     u = np.zeros((Nt, Nu))
-#     x = np.linspace(a, b, Nu)  # Spatial grid
-#     u[0] = u0(x)  # Applying the initial condition
 
-#     # Adjusted matrix A for Implicit Euler
-#     r = D * dt / dx**2
-#     A = np.diag((1 + 2*r) * np.ones(Nu)) - np.diag(r * np.ones(Nu - 1), -1) - np.diag(r * np.ones(Nu - 1), 1)
 
-#     # Apply Dirichlet boundary conditions in A
-#     A[0, 0], A[-1, -1] = 1, 1
-#     A[0, 1], A[-1, -2] = 0, 0  # Ensuring no flux contribution from outside the domain
+def linalg_implicit(D, f, u0, bc_left, bc_right, a, b, dx, dt, T):
+    """
+    Solves a non-linear heat equation u_t = D*u_xx + f(t, x, u) using the implicit Euler method,
+    with support for Neumann boundary conditions.
 
-#     for n in range(1, Nt):
-#         un = u[n-1]
-#         b = un   # RHS based on previous timestep, scaled by 1/dt
+    Parameters:
+    - D: Diffusion coefficient.
+    - f: Non-linear source term function, f(t, x, u).
+    - u0: Initial condition function, u0(x).
+    - bc_left, bc_right: Boundary condition objects for left and right boundaries.
+      Each BC object should have 'type' ('dirichlet' or 'neumann') and 'value'.
+    - a, b: Spatial domain boundaries.
+    - dx: Spatial step size.
+    - dt: Time step size.
+    - T: Final time.
 
-#         # Add the contribution from the q term if it's not trivial
-#         b += q(n*dt, x, un, a, b) * dt  # q term scaled by dt for the implicit method
+    Returns:
+    - u: Solution matrix, where each row represents the solution at a time step.
+    - x: Spatial grid points.
+    """
+    # Define the spatial and temporal grids
+    x = np.arange(a, b + dx, dx)
+    t = np.arange(0, T + dt, dt)
+    Nx = len(x)
+    Nt = len(t)
+    r = D * dt / dx**2
 
-#         # Apply boundary conditions
-#         if bc_left.bc == 'dirichlet':
-#             b[0] = bc_left.value
-#         elif bc_left.bc == 'neumann':
-#             A[0, 0] = -1 / dx
-#             A[0, 1] = 1 / dx
-#             b[0] += bc_left.value * dx / D  # Adjust for Neumann on the left
+    # Initialize the solution matrix
+    u = np.zeros((Nt, Nx))
+    u[0, :] = u0(x)
 
-#         if bc_right.bc == 'dirichlet':
-#             b[-1] = bc_right.value
-#         elif bc_right.bc == 'neumann':
-#             b[-1] += bc_right.value * dx / D  # Adjust for Neumann on the right
+    # Set up the coefficient matrix for the implicit scheme
+    A = np.zeros((Nx, Nx))
+    np.fill_diagonal(A, 1 + 2*r)
+    np.fill_diagonal(A[1:, :], -r)
+    np.fill_diagonal(A[:, 1:], -r)
 
-#         # Solve the system for this timestep
-#         u[n] = np.linalg.solve(A, b)
+    # Adjust the matrix for boundary conditions
+    if bc_left.bc == 'neumann':
+        A[0, 0] = 1 + r  # Adjust the coefficient for Neumann BC
+    else:  # Dirichlet
+        A[0, :] = 0
+        A[0, 0] = 1
 
-#     return u,x
+    if bc_right.bc == 'neumann':
+        A[-1, -1] = 1 + r  # Adjust the coefficient for Neumann BC
+    else:  # Dirichlet
+        A[-1, :] = 0
+        A[-1, -1] = 1
+
+    for n in range(1, Nt):
+        # Evaluate the non-linear term including dependency on x and t
+        non_linear_term = f(t[n], x, u[n-1, :])
+        
+        # Construct the right-hand side F for the linear system
+        F = u[n-1, :] + dt * non_linear_term
+
+        # Apply boundary conditions
+        if bc_left.bc == 'neumann':
+            F[0] += r * bc_left.value * dx  # Adjust F for Neumann BC
+        else:  # Dirichlet
+            F[0] = bc_left.value 
+        
+
+        if bc_right.bc == 'neumann':
+            F[-1] += r * bc_right.value * dx  # Adjust F for Neumann BC
+        else:  # Dirichlet
+            F[-1] = bc_right.value
+
+        # Solve the system A*u[n, :] = F
+        u[n, :] = np.linalg.solve(A, F)
+
+    return u, x, t
 
 
 def diffusion_implicit_euler(D, q, bc_left, bc_right, u0, dt, dx, T, a, b):
@@ -145,7 +182,7 @@ def diffusion_implicit_euler(D, q, bc_left, bc_right, u0, dt, dx, T, a, b):
 
     # Define the function for fsolve
     def solve_u_next(U_next, U_prev, n):
-        non_linear_term = q(n*dt, x, U_next, a, b)
+        non_linear_term = q(n*dt, x, U_next)
         # Construct the diffusion part using central difference (Laplacian)
         diffusion_term = np.zeros_like(U_next)
         diffusion_term[1:-1] = D * (U_next[:-2] - 2*U_next[1:-1] + U_next[2:]) / dx**2
@@ -174,13 +211,14 @@ def diffusion_implicit_euler(D, q, bc_left, bc_right, u0, dt, dx, T, a, b):
         # Use fsolve to find U_next
         U_next_initial_guess = U_prev  # Initial guess for U_next
         # Solve for U_next using fsolve
-        u[n, :], infodict, ier, mesg = fsolve(solve_u_next, U_next_initial_guess, args=(U_prev, n), full_output=True)
-        if ier != 1:
-            print(f"FSolve did not converge at time step {n}, message: {mesg}")
+        #u[n, :], infodict, ier, mesg = fsolve(solve_u_next, U_next_initial_guess, args=(U_prev, n), full_output=True)
+        sol = root(solve_u_next, U_prev, args=(U_prev, n))
+        if not sol.success:
+            print(f"Root did not converge at time step {n}, message: {sol.message}")
             break
+        u[n, :] = sol.x 
 
     return u, x
-
 
 
 def solve_diffusion(problem):
@@ -194,19 +232,20 @@ def solve_diffusion(problem):
     time_span = problem.time_span
     t_eval = problem.t_eval
     method = problem.method
-    print(method)
+    
 
     dx = (b - a) / N
     x = np.linspace(a, b, N+1)
 
     if method == 'explicit_euler':
         dt = time_span[1] / (len(t_eval) - 1)
+        print(dt)
         U = np.zeros((len(t_eval), N+1))
         U[0] = initial_condition(x)
 
         for i in range(len(t_eval) - 1):
-            U[i+1] = explicit_euler_step(U[i], D, q, dt, a, b, N, boundary_conditions[0], boundary_conditions[1])
-
+            U[i+1] = explicit_euler_step(U[i], D, q, dt, a, b, N, boundary_conditions[0], boundary_conditions[1],T=time_span[1])
+        print(method)
     elif method == 'solve_ivp':
         t_eval = np.linspace(*time_span, N)
         def diffusion_system(t, U):
@@ -214,14 +253,14 @@ def solve_diffusion(problem):
 
         U = solve_ivp(diffusion_system, time_span, initial_condition(x), t_eval=t_eval, method='RK45').y
         U = U.T
-    
+        print(method)
     elif method == 'implicit_euler':
         dt = 0.01
         U,x = diffusion_implicit_euler(D, q, boundary_conditions[0], boundary_conditions[1], initial_condition, dt, dx, time_span[1], a, b)
-
+        print(method)
     else:
         raise ValueError("Invalid method. Choose 'explicit_euler' , 'solve_ivp' or implicit_euler.")
-
+    
     return x, t_eval, U
 
 
@@ -229,6 +268,7 @@ def solve_diffusion(problem):
 
 def animate_solution(x, t_eval, U,title):
     fig, ax = plt.subplots()
+    t_eval = np.linspace(t_eval[0], t_eval[-1], len(U))
     line, = ax.plot(x, U[0], color='blue')
     ax.set_xlim(np.min(x)-0.5, np.max(x)+0.5)
     ax.set_ylim(np.min(U), np.max(U)+0.5)
@@ -292,62 +332,82 @@ def plot_multiple_solutions_3d(solution_sets, titles):
 def main():
     a = 0
     b = 2
-    D = 0.5
-    N = 50
+    D = 1
+    N = 20
     T = 0.5
 
-    q = lambda t, x, U, a, b: 0*x #U * np.sin(x)
+    q = lambda t, x, U: x*U
+
 
     def initial_condition(x):
-        return 0.5 * x*(2-x) 
+        return np.sin(np.pi * (x) / (1))
 
     def left_boundary_condition(t):
-        return 1
+        return t
 
     def right_boundary_condition(t):
-        return 1
-    
+        return t
     dx = (b - a) / N
     time_span = (0, T)
     dt = 0.00125
     #value of dt where explicit euler method is stable critera:
     #dt <= dx**2/(2*D)
     dt_max = ((b-a)/N)**2/ (2 * D)
-    print(f'Using the Criterion to maintian stability for the Explicit Euler Method, the Maxium value of Delta T = {dt_max}') 
+    print(f'Using the Criterion to maintian stability for the Explicit Euler Method, the Maxium value of Delta t = {dt_max}') 
     dt = 0.5*dt_max
 
     t_eval = np.arange(*time_span, dt)
 
-    boundary_conditions = (BoundaryCondition('neumann', value=left_boundary_condition(0)),
-                           BoundaryCondition('neumann', value=right_boundary_condition(0)))
+    boundary_conditions = (BoundaryCondition('dirichlet', value=1),
+                           BoundaryCondition('dirichlet', value=1))
 
-    #IVP Method
+    start_time = time.time()
     problem_ivp = DiffusionProblem(N,a, b, D, q, initial_condition, boundary_conditions, time_span, t_eval, method='solve_ivp')
-    #Explicit Euler Method
-    problem_euler = DiffusionProblem(N,a, b, D, q, initial_condition, boundary_conditions, time_span, t_eval, method='explicit_euler')
-    #Implicit Euler Method
-    x,t,U = solve_diffusion(DiffusionProblem(N,a, b, D, q, initial_condition, boundary_conditions, time_span, t_eval, method='implicit_euler'))
-    
-    x = np.linspace(a, b, N+1)
     x_ivp, t_eval_ivp, U_ivp = solve_diffusion(problem_ivp)
-    x_euler, t_eval_euler, U_euler = solve_diffusion(problem_euler)
+    ivp_time = time.time() - start_time
 
-    solution_sets = [(x_ivp, t_eval_ivp, U_ivp), (x_euler, t_eval_euler, U_euler), (x, t, U)]
-    titles = ['IVP Method', 'Explicit Euler Method', 'Implicit Euler Method']
+    #Explicit Euler Method
+    start_time = time.time()
+    problem_euler = DiffusionProblem(N,a, b, D, q, initial_condition, boundary_conditions, time_span, t_eval, method='explicit_euler')
+    x_euler, t_eval_euler, U_euler = solve_diffusion(problem_euler)
+    euler_time = time.time() - start_time
+
+    #Implicit Euler Method using Fsolve - when q is exponential in the non-linear term fsolve does not converge well.
+    start_time = time.time()
+    x_imp,t_imp,U_imp = solve_diffusion(DiffusionProblem(N,a, b, D, q, initial_condition, boundary_conditions, time_span, t_eval, method='implicit_euler'))
+    implicit_time = time.time() - start_time
+
+    #Implicit Euler Method using linalg.solve
+    start_time = time.time()
+    U,x,t = linalg_implicit(D, q, initial_condition, boundary_conditions[0], boundary_conditions[1], a, b, dx, dt, T)
+    implicit_time_linalg = time.time() - start_time
+
+
+
+    print(f"IVP Method execution time: {ivp_time:.4f} seconds")
+    print(f"Explicit Euler Method execution time: {euler_time:.4f} seconds")
+    print(f"Implicit Euler Method execution time: {implicit_time:.4f} seconds")
+    print(f"Implicit Linalg.solve execution time: {implicit_time_linalg:.4f} seconds")
+
+
+    solution_sets = [(x_ivp, t_eval_ivp, U_ivp), (x_euler, t_eval_euler, U_euler), (x, t, U), (x_imp,t_imp,U_imp)]
+    titles = ['IVP Method', 'Explicit Euler Method', 'Linalg Implicit Euler Method ','Fsolve Implicit Euler Method']
     plot_multiple_solutions_3d(solution_sets, titles)
 
     animate_solution(x_ivp, t_eval_ivp, U_ivp, "IVP Method")
     
     animate_solution(x_euler, t_eval_euler, U_euler, "Explicit Euler Method")
 
-    animate_solution(x, t, U, 'Implicit Euler Method')
+    animate_solution(x_imp, t_imp, U_imp, "Fsolve Implicit Euler Method")
+
+    animate_solution(x, t, U, 'Linalg Implicit Euler Method')
 
 
 if __name__ == '__main__':
     main()
 
-#TODO: Add IMEX ability from week 22
-
+#TODO: Add IMEX ability from week 22 & t dependent BCs
+#TODO: Fsolve Implicit Euler Method: Investigate why fsolve does not converge well when q is exponential in the non-linear term
 
 # Simulates Exercise 1 analytical sol from week 20
 
@@ -360,6 +420,7 @@ if __name__ == '__main__':
 
 # # Pre-calculate exact solution for all time steps
 # u_exact = np.zeros((int((t_end - t_start) / t_step) + 1, x.size))
+
 # for i, t in enumerate(np.arange(t_start, t_end + t_step, t_step)):
 #     u_exact[i, :] = np.exp(-D * np.pi ** 2 * t / ((b - a) ** 2)) \
 #                    * np.sin(np.pi * (x - a) / (b - a))
