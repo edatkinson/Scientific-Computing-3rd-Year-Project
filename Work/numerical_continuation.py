@@ -156,11 +156,20 @@ def pseudo_continuation(ode, x0, par_array, par_index, min_par, max_par, max_ste
     u_old, u_current = find_initial_sols(ode, x0, phase_condition, par_index, par_array, par_step)
     sol[:, 0] = u_old
     
+    # for i in range(1, max_steps + 1):
+    #     if par_array[par_index] + par_step < min_par:
+    #         print("Parameter boundary reached or exceeded.")
+    #         break
     for i in range(1, max_steps + 1):
-        if par_array[par_index] + par_step < min_par:
+        updated_value = par_array[par_index] + par_step
+        if updated_value < min_par or updated_value > max_par:
             print("Parameter boundary reached or exceeded.")
             break
+        else:
+            # Update the parameter within the allowable range
+            par_array[par_index] = updated_value
         
+        #print(par_array[par_index])
         par_array[par_index] += par_step
         #print(par_array[par_index])
         u_pred, delta_u = predict(u_current, u_old)
