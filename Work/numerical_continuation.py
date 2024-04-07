@@ -5,7 +5,7 @@ from bvp_and_shooting import phase_condition, shoot, limit_cycle_finder
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.optimize import fsolve
-from Equations_Functions import hopf, modified_hopf, lokta_volterra
+from Equations_Functions import hopf, modified_hopf, lokta_volterra, hopf_bifurcation_3d
 import warnings 
 from numpy import linalg as LA
 
@@ -21,8 +21,6 @@ results = continuation(
     root_finder=scipy.optimize.fsolve # solver to use
 )
 '''
-
-
 
 
 def plotter(param_values, cycles, eq):
@@ -134,19 +132,30 @@ def find_initial_sols(f, u0_guess, phase_condition,par_index, par0,par_step):
 
 
 def predict(u_current,u_previous):
-    delta_u = u_current - u_previous
-    u_approx = u_current + delta_u
-    return [u_approx, delta_u]
+    delta_u = u_current - u_previous #secant
+    u_pred = u_current + delta_u 
+    return u_pred, delta_u
 
-def corrector(ode,u,par_index,par_array,u_pred,delta_u): #u is the var to solve for
+def corrector_with_arclength(ode,u,par_index,par_array,u_pred,delta_u, u_old,par_step): #u is the var to solve for
     par_array[par_index] = u[-1]
     G = shoot(ode,phase_condition)
     shoot_res =  G(u[:-2], u[-2],par_array)
     pAL = np.dot(u - u_pred, delta_u)
+    
+    #secant:
+    secant_u = delta_u[:-2] #u1,u2,u3
+    secant_p = delta_u[-1] #par
+
+    # print(u_pred, 'u_pred')
+    # print(u_old, 'u_old')
+    # print(u, 'u')
+    #pAL = np.dot(-u_pred[:-2] + u[:-2], secant_u) + np.dot(-u_pred[-1]+u[-1],secant_p)
+
+
     return np.append(shoot_res, pAL)
 
 
-# Adjusting the continuation function for a parameter range from 3 to 2
+
 def pseudo_continuation(ode, x0, par_array, par_index, min_par, max_par, max_steps):
     par_step = -abs((max_par - min_par) / max_steps)  # Ensure the step is negative for decreasing
     
@@ -154,12 +163,8 @@ def pseudo_continuation(ode, x0, par_array, par_index, min_par, max_par, max_ste
     
     par_array[par_index] = max_par  # Start from the max parameter value
     u_old, u_current = find_initial_sols(ode, x0, phase_condition, par_index, par_array, par_step)
-    sol[:, 0] = u_old
+    sol[:, 0] = u_old # u_old = [u1,u2,u3,T,par]
     
-    # for i in range(1, max_steps + 1):
-    #     if par_array[par_index] + par_step < min_par:
-    #         print("Parameter boundary reached or exceeded.")
-    #         break
     for i in range(1, max_steps + 1):
         updated_value = par_array[par_index] + par_step
         if updated_value < min_par or updated_value > max_par:
@@ -172,9 +177,11 @@ def pseudo_continuation(ode, x0, par_array, par_index, min_par, max_par, max_ste
         #print(par_array[par_index])
         par_array[par_index] += par_step
         #print(par_array[par_index])
-        u_pred, delta_u = predict(u_current, u_old)
-        
-        u_corrected = fsolve(lambda u: corrector(ode, u, par_index, par_array, u_pred, delta_u), u_pred, xtol=1e-6, epsfcn=1e-6)
+        u_pred, delta_u = predict(u_current, u_old) #u_pred = [u1,u2,u3,T,par], delta_u = [du1,du2,du3,dT,dpar]
+        # print(u_pred, 'u_pred') 
+        # print(delta_u, 'delta_u')
+        #u_corrected = fsolve(lambda u: corrector(ode, u, par_index, par_array, u_pred, delta_u), u_pred, xtol=1e-6, epsfcn=1e-6)
+        u_corrected = fsolve(lambda u: corrector_with_arclength(ode, u, par_index, par_array, u_pred, delta_u, u_old, par_step), u_pred, xtol=1e-6, epsfcn=1e-6)
         u_corrected = np.append(u_corrected[:-1], par_array[par_index])  # Ensure the last value is the parameter
         
         u_old = u_current
@@ -182,6 +189,10 @@ def pseudo_continuation(ode, x0, par_array, par_index, min_par, max_par, max_ste
         sol[:, i] = u_current
         #print(sol[:, i])
     return sol[:, :i]
+
+
+
+
 
 
 def main():
@@ -204,17 +215,19 @@ def main():
     # ####Pseudo Arc Length Method #####
 
     max_steps = 100
-    x0 = np.array([3.4, 3.2, 6.2])
-    par_array = [2]  # Start parameter value
+    x0 = np.array([1.04, 0.52, -0.52, 10.89])
+    par_array = [2]
     par_index = 0
-    par_step = -0.1  # Ensure the step is negative for decreasing
     min_par = -1
     max_par = 2
 
-    sol = pseudo_continuation(modified_hopf, x0, par_array, par_index, min_par, max_par, max_steps)
-    print(sol)
-    plt.plot(sol[3, :], sol[0, :], label='u1')
-    plt.plot(sol[3, :], sol[1, :], label='u2')
+    sol = pseudo_continuation(hopf_bifurcation_3d, x0, par_array, par_index, min_par, max_par, max_steps)
+    print(sol[4,:])
+
+
+    plt.plot(sol[4, :], sol[0, :], label='x')
+    plt.plot(sol[4, :], sol[1, :], label='y')
+    plt.plot(sol[4, :], sol[2, :], label='z')
     plt.xlabel('Parameter', fontsize=12)
     plt.xlim(min_par, max_par)
     plt.ylabel('u', fontsize=12)
@@ -222,7 +235,6 @@ def main():
     plt.legend(fontsize=12)
     plt.grid(True)
     plt.show()
-
 
 
 if __name__ == "__main__":
