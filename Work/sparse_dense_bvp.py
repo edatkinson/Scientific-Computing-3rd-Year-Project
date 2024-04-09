@@ -9,29 +9,47 @@ from reaction_diffusion import BoundaryCondition
 # Constants
 D = 1.0
 
-# Function to set up the finite difference matrix for the second derivative
-def setup_finite_difference_matrix(n_points, sigma, h, bc_left, bc_right,method='dense'):
-    """
-    Sets up the finite difference matrix for the second derivative.
 
-    Parameters:
-    - n_points (int): Number of grid points.
-    - sigma (float): The parameter sigma in the equation.
-    - h (float): The grid spacing.
-    - bc_left (tuple): The type ('Dirichlet' or 'Neumann') and value of the left boundary condition.
-    - bc_right (tuple): The type ('Dirichlet' or 'Neumann') and value of the right boundary condition.
-    - method (str): 'dense' for a dense matrix, 'sparse' for a sparse matrix.
+def setup_finite_difference_matrix(n_points, h, equation_type, bc_left, bc_right, coefficients,method='sparse'):
+    # Setup the diagonals
+    # main_diag = -2.0 * np.ones(n_points) / h**2
+    # upper_diag = np.ones(n_points - 1) / h**2 + sigma / (2 * h) 
+    # lower_diag = np.ones(n_points - 1) / h**2 - sigma / (2 * h) + sigma / h
+    N = n_points
 
-    Returns:
-    - ndarray or csr_matrix: The finite difference matrix.
-    """
-    diagonal = -2.0 * np.ones(n_points)
-    off_diagonal = np.ones(n_points - 1)
-    if method == 'dense':
-        A = (np.diag(diagonal, 0) + np.diag(off_diagonal, 1) + np.diag(off_diagonal, -1)) * D / h**2
-    elif method == 'sparse':
-        A = diags([diagonal, off_diagonal, off_diagonal], [0, 1, -1], format='csr') * D / h**2
+    main_diag = np.zeros(N)
+    upper_diag = np.zeros(N - 1)
+    lower_diag = np.zeros(N - 1)
+    
+    # Depending on the equation type, set up the diagonals
+    if 'diffusion' in equation_type:
+        D = coefficients.get('D')  # Default to 1.0 if not specified
+        main_diag[:] = -2 * D / h**2
+        upper_diag[:] = lower_diag[:] = D / h**2 
 
+    if 'convection' in equation_type:
+        P = coefficients.get('P')  # Default to 0.0 if not specified
+        upper_diag += P / (2*h)
+        lower_diag -= P / (2*h)
+
+    if 'reaction' in equation_type:
+        # For reaction terms, add to main diagonal based on the reaction coefficient
+        # This part would be customized based on the specific reaction term
+        R = coefficients.get('R')  # Reaction coefficient
+        if R > 0:
+            lower_diag += R / h  # Upwind scheme
+        else:
+            upper_diag -= R / h  # Upwind scheme
+        
+    
+
+    # Create the sparse matrix
+    if method == 'sparse':
+        A = diags([lower_diag, main_diag, upper_diag], [-1, 0, 1], format='csr')
+    else:
+        A = np.diag(main_diag) + np.diag(upper_diag, 1) + np.diag(lower_diag, -1)
+
+    # Apply the boundary conditions
     A = apply_boundary_conditions(A, bc_left, bc_right, h)
 
     return A
@@ -42,13 +60,11 @@ def apply_boundary_conditions(A, bc_left, bc_right, h):
 
     Parameters:
     - A (ndarray or csr_matrix): The finite difference matrix.
-    - bc_left (tuple): The type ('Dirichlet' or 'Neumann') and value of the left boundary condition.
-    - bc_right (tuple): The type ('Dirichlet' or 'Neumann') and value of the right boundary condition.
+    - bc_left (Class object): The left boundary condition.
+    - bc_right (Class object): The right boundary condition.
     - h (float): The grid spacing.
     """
     
-    
-
     if bc_left.bc == 'Dirichlet':
         A[0, 0] = 1.0
         A[0, 1] = 0.0
@@ -65,8 +81,22 @@ def apply_boundary_conditions(A, bc_left, bc_right, h):
 
     return A
 
-# Function to setup the right-hand side of the equation
-def setup_rhs(n_points, sigma, domain, h, bc_left, bc_right):
+#Function to setup the right-hand side of the equation
+def apply_rhs_boundary(rhs, h, bc_left, bc_right):
+
+    if bc_left.bc == 'Dirichlet':
+        rhs[0] = bc_left.value
+    elif bc_left.bc == 'Neumann':
+        rhs[0] = bc_left.value * h # forward difference
+        
+    if bc_right.bc == 'Dirichlet':
+        rhs[-1] = bc_right.value
+    elif bc_right.bc == 'Neumann':
+        rhs[-1] =  bc_right.value *h
+    
+    return rhs
+
+def setup_rhs_poisson(n_points, coefficients, h, bc_left, bc_right,domain):
     """
     Sets up the right-hand side of the Poisson equation.
 
@@ -75,51 +105,49 @@ def setup_rhs(n_points, sigma, domain, h, bc_left, bc_right):
     - sigma (float): The parameter sigma in the equation.
     - domain (ndarray): The domain of x values.
     - h (float): The grid spacing.
-    - bc_left (tuple): The type ('Dirichlet' or 'Neumann') and value of the left boundary condition.
-    - bc_right (tuple): The type ('Dirichlet' or 'Neumann') and value of the right boundary condition.
+    - bc_left (Class object): The left boundary condition.
+    - bc_right (Class object): The right boundary condition.
 
     Returns:
     - ndarray: The right-hand side vector.
     """
+
+    sigma = coefficients.get('sigma')  
     rhs = -(1 / (np.sqrt(2 * np.pi * sigma**2))) * np.exp(-domain**2 / (2 * sigma**2))
-
-    
-    if bc_left.bc == 'Dirichlet':
-        rhs[0] = bc_left.value
-    elif bc_left.bc == 'Neumann':
-        rhs[0] = bc_left.value * h # forward difference
-        
-
-    if bc_right.bc == 'Dirichlet':
-        rhs[-1] = bc_right.value
-    elif bc_right.bc == 'Neumann':
-        rhs[-1] =  bc_right.value *h
-        
+    #Apply boundary conditions
+    rhs = apply_rhs_boundary(rhs, h, bc_left, bc_right)
 
     return rhs
 
+def setup_rhs_reaction(n_points, coefficients, h, bc_left, bc_right, domain):
+    R = coefficients.get('R')  # Reaction term
+    rhs = np.ones(n_points) * R  # Reaction term
+    rhs = apply_rhs_boundary(rhs, h, bc_left, bc_right)
+    
+    return rhs
 
-def solve_dense(sigma, domain, h, bc_left, bc_right):
+
+def solve_dense(rhs,domain, h, bc_left, bc_right, coefficients, equation_type):
     """
     Solves the Poisson equation using a dense matrix approach. 
 
     Parameters:
-        - sigma (float): The parameter sigma in the equation.
+        - sigma (float): The parameter in the equation.
         - domain (ndarray): The domain of x values.
         - h (float): The grid spacing.
-        - bc_left (tuple): The type ('Dirichlet' or 'Neumann') and value of the left boundary condition.
-        - bc_right (tuple): The type ('Dirichlet' or 'Neumann') and value of the right boundary condition.
+        - bc_left (Class object): The left boundary condition.
+        - bc_right (Class object): The right boundary condition.
 
     Returns:
         - ndarray: The solution vector u(x).
     """
-
-    A_dense = setup_finite_difference_matrix(len(domain), sigma, h, bc_left, bc_right, method='dense')
-    rhs = setup_rhs(len(domain), sigma, domain,h, bc_left, bc_right)
-    u_dense = solve(A_dense, rhs)
+    A_dense = setup_finite_difference_matrix(len(domain), h, equation_type, bc_left, bc_right,coefficients, method='dense')
+    # rhs = setup_rhs(len(domain), sigma, domain,h, bc_left, bc_right)
+    rhs_term = rhs(len(domain), coefficients,h, bc_left, bc_right, domain)
+    u_dense = solve(A_dense, rhs_term)
     return u_dense
 
-def solve_sparse(sigma, domain, h, bc_left, bc_right):
+def solve_sparse(rhs, domain, h, bc_left, bc_right,coefficients, equation_type):
     """
     Solves the Poisson equation using a sparse matrix approach.
 
@@ -133,9 +161,10 @@ def solve_sparse(sigma, domain, h, bc_left, bc_right):
         - ndarray: The solution vector u(x).
 
      """
-    A_sparse = setup_finite_difference_matrix(len(domain), sigma, h, bc_left, bc_right, method='sparse')
-    rhs = setup_rhs(len(domain), sigma, domain,h, bc_left, bc_right)
-    u_sparse = spsolve(A_sparse, rhs)
+    A_sparse = setup_finite_difference_matrix(len(domain), h, equation_type, bc_left, bc_right, coefficients, method='sparse')
+    #rhs = setup_rhs(len(domain), sigma, domain,h, bc_left, bc_right)
+    rhs_term = rhs(len(domain), coefficients, h, bc_left, bc_right, domain)
+    u_sparse = spsolve(A_sparse, rhs_term)
     return u_sparse
 
 
@@ -153,17 +182,53 @@ def plot_solutions(domain, u_dense, u_sparse):
 
 
 def main():
-    no_points = 51
+    equation_type_Q6 = 'convection-diffusion-reaction' #would need to set up a rhs function for this
+    
+    no_points = 81
     a = -1
     b = 1
     x = np.linspace(a, b, no_points)  # 501 points in the domain
     dx = x[1] - x[0]  # Step size
+    dx = (b-a)/(no_points-1)
+
     bc_left = BoundaryCondition('Dirichlet', -1)
     bc_right = BoundaryCondition('Dirichlet', -1)
-    u_dense = solve_dense(sigma=0.5, domain=x, h=dx,bc_left=bc_left,bc_right=bc_right)
-    u_sparse = solve_sparse(sigma=0.1, domain=x, h=dx, bc_left=bc_left, bc_right=bc_right)
+
+
+    coefficients_possion = {'D': 1.0, 'sigma': 0.5}
+    #Poisson equation
+    u_dense = solve_dense(setup_rhs_poisson,domain=x, h=dx,bc_left=bc_left,bc_right=bc_right, coefficients=coefficients_possion, equation_type='diffusion')
+    u_sparse = solve_sparse(setup_rhs_poisson,domain=x, h=dx, bc_left=bc_left, bc_right=bc_right, coefficients=coefficients_possion, equation_type='diffusion')
+    print(f"Max dense solution: {max(u_dense):5f}")
+    print(f"Max sparse solution: {max(u_sparse):5f}")
     plot_solutions(x, u_dense, u_sparse)
 
+
+
+
+    #P = 1
+    coefficients_P1 = {'D': 1.0, 'P': 1, 'R': 1}
+    u_dense = solve_dense(setup_rhs_reaction,domain=x, h=dx,bc_left=bc_left,bc_right=bc_right, coefficients=coefficients_P1, equation_type=equation_type_Q6)
+    u_sparse = solve_sparse(setup_rhs_reaction,domain=x, h=dx, bc_left=bc_left, bc_right=bc_right, coefficients=coefficients_P1, equation_type=equation_type_Q6)
+    print(f"Max dense solution: {max(u_dense):5f}")
+    print(f"Max sparse solution: {max(u_sparse):5f}")
+    plot_solutions(x, u_dense, u_sparse)
+
+    #P = 10
+    coefficients_P2 = {'D': 1.0, 'P': 10, 'R': 10}
+    u_dense = solve_dense(setup_rhs_reaction,domain=x, h=dx,bc_left=bc_left,bc_right=bc_right, coefficients=coefficients_P2, equation_type=equation_type_Q6)
+    u_sparse = solve_sparse(setup_rhs_reaction,domain=x, h=dx, bc_left=bc_left, bc_right=bc_right, coefficients=coefficients_P2, equation_type=equation_type_Q6)
+    print(f"Max dense solution: {max(u_dense):5f}")
+    print(f"Max sparse solution: {max(u_sparse):5f}")
+    plot_solutions(x, u_dense, u_sparse)
+
+    #P = 50
+    coefficients_P3 = {'D': 1.0, 'P': 50, 'R': 50}
+    u_dense = solve_dense(setup_rhs_reaction,domain=x, h=dx,bc_left=bc_left,bc_right=bc_right, coefficients=coefficients_P3, equation_type=equation_type_Q6)
+    u_sparse = solve_sparse(setup_rhs_reaction,domain=x, h=dx, bc_left=bc_left, bc_right=bc_right, coefficients=coefficients_P3, equation_type=equation_type_Q6)
+    print(f"Max dense solution: {max(u_dense):5f}")
+    print(f"Max sparse solution: {max(u_sparse):5f}")
+    plot_solutions(x, u_dense, u_sparse)
 
 if __name__ == '__main__':
     main()
