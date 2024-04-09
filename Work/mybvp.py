@@ -1,114 +1,88 @@
-
-import numpy as np  
-import matplotlib.pyplot as plt 
-from scipy.optimize import fsolve, root
-from scipy.integrate import solve_ivp
-from new_ode_solver import solve_ode
-
-import warnings
-from Equations_Functions import lokta_volterra, hopf, hopf_3dim, modified_hopf
-'''
-To find limit cycles, we must solve the periodic boundary value problem (BVP)
-Solve u(0) - u(T) = 0, = u0 - F(u0, T) = 0.
-
-T = 2pi/omega
-
-Hence, limit cycles of (3) can be found by passing (6) along with a suitable initial guess u ̃ 0 to a numerical root finder such as fsolve in Matlab or Python (Scipy) or nlsolve in Julia.
-All of the above can be trivially generalised to arbitrary periodically- forced ODEs of any number of dimensions.
-
-'''
+import numpy as np
+from scipy.optimize import root
+import matplotlib.pyplot as plt
+from reaction_diffusion import BoundaryCondition
 
 
-#####Root finding problem and shooting########
+def finite_difference_scheme(N, h, D, q_func, bc_left, bc_right):
+    def system(u, p):
+        # Interior points
+        du2dx2 = (u[:-2] - 2*u[1:-1] + u[2:]) / h**2
+        # Evaluate q at interior points
+        x_inner = np.linspace(a + h, b - h, N-2)
+        q_term = q_func(u[1:-1], x_inner, p)
+        F = D * du2dx2 + q_term
 
-def phase_condition(ode,u0,pars):
-    #return the phase condition which is du1/dt(0) = 0
-    return np.array([ode(0,u0,pars)[0]])
+        # Apply boundary conditions
+        F = np.concatenate(([0], F, [0]))  # Start with Dirichlet BCs as placeholders
+        
+        # Dirichlet conditions
+        F[0] = u[0] - bc_left.value
+        F[-1] = u[-1] - bc_right.value
 
-def shoot(f, phase_cond):
+        # Neumann conditions at the boundaries 
+        if bc_left.bc == 'Neumann':
+            F[0] = (u[1] - u[0]) / h - bc_left.value
+        if bc_right.bc == 'Neumann':
+            F[-1] = (u[-1] - u[-2]) / h - bc_right.value
+        
+        #Add in Robin conditions
 
-    def J(u0,T,pars):
-        # Solve ODE system using Solve IVP 
-        #t = np.linspace(0, T, 100)
-        _,sol = solve_ode(f, (0,T), u0, h=0.01,method='rk4',pars=pars)
-        final_sol = sol[-1, :]
-        #print(final_sol)
-        # Calculate differences between actual and estimates
-        return np.append(u0 - final_sol, phase_cond(f, u0, pars=pars))
-
-    return J
-
-
-def orbit_my(ode, uinitial, duration,pars):
-    _,sol = solve_ode(ode, (0,duration),uinitial, h=0.01,method='rk4',pars=pars)
-    #print(sol[:,-1])
-    return sol
-
-def limit_cycle(ode,estimate,phase_condition,pars):
-    J = shoot(ode,phase_condition)
-    u0 = estimate[:-1]
-    T = estimate[-1]
-    pars = pars
-    #root finding problem
-    result = fsolve(lambda estimate: J(u0,T, pars),estimate, xtol=1e-6, epsfcn=1e-6)
-    #Isolated_Orbit is the numerical approximation of the limit cycle ODE
-
-    return result
-
-def limit_cycle_finder(ode, estimate, phase_condition, pars):
-    J = shoot(ode,phase_condition)
-    #root finding problem
-    result_my = fsolve(lambda estimate: J(estimate[:-1], estimate[-1], pars),estimate, xtol=1e-6, epsfcn=1e-6)
-
-    myisolated_orbit = orbit_my(ode, result_my[0:-1],result_my[-1],pars=pars) #result[-1] is the period of the orbit, result[0:-1] are the initial conditions
-    myisolated_orbit = myisolated_orbit
+        return F
     
-    #Isolated_Orbit is the numerical approximation of the limit cycle ODE
+    return system
 
-    return result_my, myisolated_orbit
-
-def phase_portrait_plotter(sol):
-    plt.plot(sol[:,0], sol[:,1], label='Isolated periodic orbit')
-    plt.xlabel('$x$')
-    plt.ylabel('$y$')
-    plt.title('Phase portrait')
-    plt.legend()
-
-    #Code to plot the 3D Hopf limit cycle:
-    # fig = plt.figure()
-    # ax = fig.add_subplot(111, projection='3d')
-    # ax.plot(sol[:,0], sol[:,1], sol[:,2], label='Isolated periodic orbit')
-    # ax.set_xlabel('u1')
-    # ax.set_ylabel('u2')
-    # ax.set_zlabel('u3')
+# Function that represents the discretized system of equations
+def solve_bvp(N, a, b, D, q_func, bc_left, bc_right, p):
+    # Initial guess for the solution
+    x = np.linspace(a, b, N)
+    u_initial = np.zeros(N)
     
-    return plt#, fig
+    # Define step size
+    h = (b - a) / (N - 1)
+    
+    # Get the finite difference scheme for the system
+    system = finite_difference_scheme(N, h, D, q_func, bc_left, bc_right)
+    
+    # Use scipy.optimize.root to solve the system
+    sol = root(system, u_initial, args=(p,), method='hybr')
 
+    return x, sol.x
 
-#Create a Main function which does the code below
-
-
-def main():
-    lokta_pars = (1,0.1,0.1)
-    orbit, cycle1 = limit_cycle_finder(lokta_volterra, [0.1,0.1,30],phase_condition,lokta_pars)
-    print('The true values of the Lokta-Volterra orbit:', orbit)
-    fig1 = phase_portrait_plotter(cycle1) #plot the limit cycle
-    plt.show()
-
-    hopf_pars = (0.9,-1)
-    orbit, cycle2 = limit_cycle_finder(hopf, [1,0.1,7],phase_condition,hopf_pars)
-    print('The true values of the Hopf orbit:', orbit)
-    fig2 = phase_portrait_plotter(cycle2) #plot the limit cycle
-    plt.show()
-
-    t = np.linspace(0,10,100)
-    beta,sigma = hopf_pars
-    theta = 1
-    u1 = beta**0.5 * np.cos(t+theta)
-    u2 = beta**0.5 * np.sin(t+theta)
-    plt.plot(u1,u2) #plot the analytical phase portrait of the limit cycle
-    plt.show()
+# Define the function q(x, u; µ) as needed by the user
+def q_func(u,x, p):
+    # The user needs to define this function based on their specific problem
+    # This is a placeholder for demonstration purposes
+    sigma = p
+    rhs = (1 / (np.sqrt(2 * np.pi * sigma**2))) * np.exp(-x**2 / (2 * sigma**2))
+    return rhs
 
 if __name__ == "__main__":
-    main()
+    # Boundary conditions example: Left = Dirichlet, Right = Neumann
+    bc_left = BoundaryCondition('Dirichlet', -1)
+    bc_right = BoundaryCondition('Dirichlet', -1)
 
+    
+    # Domain and parameters
+    a, b = 0, 1  # Domain from a to b
+    N = 51  # Number of discretization points
+    D = 1.0  # Diffusion coefficient
+    p = 0.5  # Parameter sigma
+
+    # Solve the BVP
+    x, u = solve_bvp(N, a, b, D, q_func, bc_left, bc_right, p)
+    
+    # Plot the solution
+    plt.plot(x, u, label='Finite Difference Solution')
+    plt.xlabel('x')
+    plt.ylabel('u(x)')
+    plt.title('Solution of the BVP')
+    
+    # u = (bc_right['value'] - bc_left['value']) / (b - a) * (x-a) + bc_left['value']
+    # plt.plot(x, u)
+    #u = -1/2*D * (x-a)*(x-b) + (bc_right['value'] - bc_left['value']) / (b - a) * (x-a) + bc_left['value']
+    plt.legend()
+    plt.show()
+
+
+    
