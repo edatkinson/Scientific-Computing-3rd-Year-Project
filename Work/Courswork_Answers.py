@@ -155,10 +155,96 @@ par_pseudo, sol_pseudo = numerical_continuation(hopf_bifurcation_3d,
     increase=False)
 
 pseudo_plotter(par_pseudo, sol_pseudo)
-#Solve_IVP is better than solve_ode in this case due to squared terms in the equations
+#Solve_IVP is better than solve_ode in this case due to squared terms in the equations, means x0, bounds and step size need to be chosen carefully
 
 
 
 # %%
 #Question 3:
+# a)  Use the finite difference method to solve the Poisson equation
+#  Solve for u(x) using
+# i. one of SciPy’s root-finding functions or using NumPy when σ = 0.5;
+# ii. using SciPy with sparse matrices when σ = 0.1.
+# In each case, use 51 equally spaced grid points to discretise the x variable. In each
+# case, print the value of u(0) to the screen using at least four significant digits. Create
+# a single figure that plots all of your solutions u(x).
 
+from sparse_dense_bvp import solve_dense, solve_sparse, plot_solutions, setup_rhs_poisson
+import numpy as np
+from reaction_diffusion import BoundaryCondition
+import time
+
+equation_type_Q6 = 'convection-diffusion-reaction' #would need to set up a rhs function for this
+    
+no_points = 51
+a = -1
+b = 1
+x = np.linspace(a, b, no_points)  # 501 points in the domain
+dx = x[1] - x[0]  # Step size
+dx = (b-a)/(no_points-1)
+
+bc_left = BoundaryCondition('Dirichlet', -1)
+bc_right = BoundaryCondition('Dirichlet', -1)
+
+coefficients_possion_dense = {'D': 1.0, 'sigma': 0.5}
+coefficients_possion_sparse = {'D': 1.0, 'sigma': 0.1}
+
+u_dense = solve_dense(setup_rhs_poisson,domain=x, h=dx,bc_left=bc_left,bc_right=bc_right, coefficients=coefficients_possion_dense, equation_type='diffusion')
+u_sparse = solve_sparse(setup_rhs_poisson,domain=x, h=dx, bc_left=bc_left, bc_right=bc_right, coefficients=coefficients_possion_sparse, equation_type='diffusion')
+print(f'Value of u(0) for dense: {u_dense[25]:.4f}')
+print(f'Value of u(0) for sparse: {u_sparse[25]:.4f}')
+
+plot_solutions(x, u_dense, u_sparse)
+
+# %%
+#b)
+# Now increase the number of grid points to 501 and set σ = 0.05. Solve the Poisson
+# equation using the approaches from part (a) that you have implemented. In each
+# case, time your code using the %timeit function. Explain which approach is faster
+
+no_points = 501
+x = np.linspace(a, b, no_points)  # 501 points in the domain
+dx = x[1] - x[0]  # Step size
+dx = (b-a)/(no_points-1)
+
+coefficients_possion_dense = {'D': 1.0, 'sigma': 0.05}
+coefficients_possion_sparse = {'D': 1.0, 'sigma': 0.05}
+
+start_time = time.time()
+u_dense = solve_dense(setup_rhs_poisson,
+    domain=x, 
+    h=dx,
+    bc_left=bc_left,
+    bc_right=bc_right, 
+    coefficients=coefficients_possion_dense,
+    equation_type='diffusion')
+end_time = time.time()
+
+time_dense = end_time - start_time
+
+start_time = time.time()
+u_sparse = solve_sparse(setup_rhs_poisson,
+    domain=x, 
+    h=dx, 
+    bc_left=bc_left,
+    bc_right=bc_right,
+    coefficients=coefficients_possion_sparse,
+    equation_type='diffusion')
+end_time = time.time()
+
+time_sparse = end_time - start_time
+
+print(f'Value of u(0) for dense: {u_dense[250]:.4f}')
+print(f'Value of u(0) for sparse: {u_sparse[250]:.4f}')
+print(f'Time taken for dense: {time_dense:.4f}')
+print(f'Time taken for sparse: {time_sparse:.4f}')
+
+#Sparse is faster than dense, as expected. Sparse matrices are more efficient for large matrices. 
+
+plot_solutions(x, u_dense, u_sparse)
+
+
+
+
+# %%
+#Question 4:
