@@ -66,7 +66,7 @@ par_nat, sol_nat = numerical_continuation(brusselator,
     increase=False) #increase parameter
 
 
-# # #Bifurcation diagram of Limit cycle and equilibria
+# #Bifurcation diagram of Limit cycle and equilibria
 
 natural_plotter(par_nat, sol_nat)
 #add titles n shiz
@@ -83,14 +83,14 @@ par_pseudo, sol_pseudo = numerical_continuation(brusselator,
     x0, 
     par_array, 
     par_index, 
-    [3, 1.5], 
+    [3, 1.5],
     [200, 30], 
     shoot, 
     fsolve, 
     phase_condition=phase_condition, 
     increase=False)
 
-pseudo_plotter(par_pseudo, sol_pseudo)
+pseudo_plotter(par_pseudo, sol_pseudo) #using solve_ivp instead of solve_ode somehow makes PAL miss the limit cycle
 
 # %%
 #Question 2:
@@ -141,16 +141,14 @@ plt.show()
 x0 = sol #starting point from b) 
 par_array = [2]  # Start parameter value - becomes redundant anyway as we start from max unless there are more parameters
 par_index = 0
-min_par = -1
-max_par = 2
 
 par_pseudo, sol_pseudo = numerical_continuation(hopf_bifurcation_3d, 
     'pseudo', 
     x0, 
     par_array, 
     par_index, 
-    [2, -0.5], 
-    [200, 30], 
+    [1, -0.6], #Bounds affect the step size
+    [200, 30], #Max steps: [PAL, Natural]. Also affects the step size  
     shoot, 
     fsolve, 
     phase_condition=phase_condition, 
