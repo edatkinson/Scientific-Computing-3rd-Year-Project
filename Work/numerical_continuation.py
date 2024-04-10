@@ -1,7 +1,6 @@
 
-from new_ode_solver import solve_ode
+from ode_solver import solve_ode
 from bvp_and_shooting import phase_condition, shoot, limit_cycle_finder
-#from mybvp import phase_condition, shoot, limit_cycle_finder
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.optimize import fsolve
@@ -25,156 +24,117 @@ results = continuation(
 '''
 
 
-def plotter(param_values, cycles, eq, sol):
-    # plt.figure(figsize=(8, 6))
-    # plt.plot(param_values, cycles[:,2], label='T')
-    # plt.xlabel('Parameter', fontsize=12)
-    # plt.ylabel('T', fontsize=12)
-    # plt.title('Bifurcation of T', fontsize=14)
-    # plt.legend(fontsize=12)
-    # plt.grid(True)
-    # plt.show()
 
-    plt.figure(figsize=(12, 6))
+def numerical_continuation(f, method, x0, par_array, par_index, par_bounds, max_steps, discretization, solver, phase_condition, increase):
 
-    plt.subplot(1, 2, 1)
-    plt.plot(param_values, cycles[:,0], label='u1')
-    plt.plot(param_values, cycles[:,1], label='u2')
-    #plt.plot(param_values, cycles[:,2], label='u3')
-    plt.xlabel('Parameter', fontsize=12)
-    plt.ylabel('u', fontsize=12)
-    plt.title('Natural Continuation Bifurcation Diagram of u1, u2, and u3', fontsize=14)
-    plt.legend(fontsize=12)
-    plt.grid(True)
+    
+    def wrapper(par_array,u0):
+        G = discretization(f,phase_condition)
+        
+        return solver(lambda u0: G(u0[:-1],u0[-1],par_array),u0)
 
-    plt.subplot(1, 2, 2)
-    plt.plot(sol[4-1, :], sol[0, :], label='x')
-    plt.plot(sol[4-1, :], sol[1, :], label='y')
-    #plt.plot(sol[4-1, :], sol[2, :], label='z')
-    plt.xlabel('Parameter', fontsize=12)
-    # plt.xlim(min_par, max_par)
-    plt.ylabel('u', fontsize=12)
-    plt.title('Pseudo Arc Length Method', fontsize=14)
-    plt.legend(fontsize=12)
-    plt.grid(True)
+    max_par, min_par = par_bounds[0], par_bounds[1]
+    max_steps_PAL, max_steps_nat = max_steps[1], max_steps[0]
 
-    plt.tight_layout()
-    plt.show()
+    if method == 'natural':
+        sol, pars = natural_continuation(f, x0, max_steps_nat, par_bounds, phase_condition, wrapper)
+        return pars, sol 
+    elif method == 'pseudo':
+        pars, sol = pseudo_continuation(f, x0, par_array, par_index, min_par, max_par, max_steps_PAL,wrapper,phase_condition,increase)
+        return pars, sol
+    else:
+        raise ValueError("Invalid continuation method. Choose 'natural' or 'pseudo'.")
 
-    # plt.figure(figsize=(8, 6))
-    # plt.plot(param_values, eq[:,0], label='u1')
-    # plt.plot(param_values, eq[:,1], label='u2')
-    # plt.xlabel('Parameter', fontsize=12)
-    # plt.ylabel('u', fontsize=12)
-    # plt.title('Equilibria', fontsize=14)
-    # plt.legend(fontsize=12)
-    # plt.grid(True)
-    # plt.show()
 
-def cubic(t,x, param):
-    f = x**3 - x - param
-    return f
 
-def hopf_example(t,u,pars):#params = (beta)
-    beta = pars
-    du1dt = beta*u[0] - u[1] - u[0] * ((u[0])**2 + (u[1])**2)
-    du2dt = u[0] + beta*u[1] - u[1] * ((u[0])**2 + (u[1])**2) 
-    dUdt = np.array([du1dt,du2dt])
-    return dUdt
-
-def wrapper(x,pars):
-    return modified_hopf(0,x,pars)
-
-def natural_continuation(f,initial_guess,steps,param_bounds,phase_condition):
+def natural_continuation(f,initial_guess,steps,param_bounds,phase_condition, wrapper):
     param_values = np.linspace(param_bounds[0],param_bounds[-1],steps)
     equilibria = np.zeros((len(param_values),len(initial_guess[:-1])))
     limit_cycle = np.zeros((len(param_values), len(initial_guess)))
 
     limit_cycle[0] = initial_guess
     equilibria[0] = initial_guess[:-1]
-    guess = initial_guess[:-1]
+    guess = initial_guess[:-1] # guess
     prev_cycle = initial_guess
 
-    for index,par in enumerate(param_values[1:]):
-        guess = equilibria[index]
-        equilibrias = fsolve(lambda u:f(0,u,[par]), guess)
-        equilibria[index+1] = equilibrias
+    if phase_condition == None:
+        for index,par in enumerate(param_values[1:]):
+            guess = equilibria[index]
+            equilibrias = fsolve(lambda u:f(0,u,[par]), guess)
+            equilibria[index+1] = equilibrias
+        
+        return equilibria, param_values
         #print(equilibrias)
 
-    for index,par in enumerate(param_values[1:]):
-        sol, cycle = limit_cycle_finder(f,prev_cycle,phase_condition,[par],test=False)
-        limit_cycle[index+1] = sol 
-        prev_cycle = sol
-        #print(prev_cycle)
-    #Could combine loops?
+    else:
 
-    return limit_cycle[1:,:], param_values[1:], equilibria[1:,:]
+        for index,par in enumerate(param_values[1:]):
+            # sol = limit_cycle_finder(f,prev_cycle,phase_condition,[par],test=False)
+            sol = wrapper([par],prev_cycle)
+            limit_cycle[index+1] = sol 
+            prev_cycle = sol
+            #print(sol)
+        return limit_cycle[1:,:], param_values[1:] 
 
-
-
-
-
-#sol = pseudo_method(hopf,[0,1,5,1.5],[1,0,5,2],phase_condition)
-
-
-# 1. Find the first two solutions using the shooting algorithm
-# 2. Use the pseudo arc length method to find the next solution
-# 3. Repeat until the parameter range is exhausted
-# 4. Plot the solutions
-# 5. Plot the bifurcation diagram
-
-
-#(1)Need 2 known solutions, use shooting to find these based off of two different initial guesses
-#(2) Generate a secant: Delta = v(i) - v(i-1)
-#(3) Predict the Solution: v(i+1) = v(i) + Delta
-#(4) Stack the pseudo arc length equation 
 
 
 def calculate_par_step(min_par, max_par, num_steps):
     return (max_par - min_par) / num_steps
 
 
-def find_initial_sols(f, u0_guess, phase_condition,par_index, par0,par_step):
-    #par0 = par0[0]
-    u1,_ = limit_cycle_finder(f,u0_guess,phase_condition,par0,test=False)
-    u1 = np.append(u1,par0[par_index])
-    
-    par0[par_index] += par_step
-    u2,_ = limit_cycle_finder(f,u1[:-1],phase_condition,par0,test=False)
-    u2 = np.append(u2,par0[par_index])
+def find_initial_sols(f, u0_guess, phase_condition,par_index, par0,par_step, wrapper):
+    # Find the first solution
+    if phase_condition == None:
+        u1 = fsolve(lambda u:f(0,u,par0), u0_guess[:])
+        u1 = np.append(u1,par0[par_index])
+        
+        par0[par_index] += par_step
+        u2 = fsolve(lambda u:f(0,u,par0), u1[:-1])
+        
+        u2 = np.append(u2,par0[par_index]) #returns the equilibrium point [u1,u2,par]
+    else:
+        u1 = wrapper(par0,u0_guess)
+        u1 = np.append(u1,par0[par_index])
+        
+        par0[par_index] += par_step
+        # find the second solution
+        u2 = wrapper(par0,u1[:-1])
+        u2 = np.append(u2,par0[par_index])
 
     return u1, u2
-
-
 
 def predict(u_current,u_previous):
     delta_u = u_current - u_previous #secant
     u_pred = u_current + delta_u 
     return u_pred, delta_u
 
-def corrector_with_arclength(ode,u,par_index,par_array,u_pred,delta_u, u_old,par_step): #u is the var to solve for
-    par_array[par_index] = u[-1]
-    #print(u[-1])
-    G = shoot(ode,phase_condition)
-    shoot_res =  G(u[:-2], u[-2],par_array)
-    
+def corrector_with_arclength(ode,u,par_index,par_array,u_pred,delta_u, u_old,par_step, phase_condition): #u is the var to solve for
+   
     #secant:
     secant_u = delta_u[:-1] #u1,u2,u3,T
     secant_p = delta_u[-1] #par
-
-    # print(u_pred, 'u_pred')
-    # print(u_old, 'u_old')
-    # print(u, 'u')
     ds = LA.norm(secant_u**2 + secant_p**2)
 
     pAL = np.dot(u[:-1]-u_pred[:-1], secant_u) + np.dot(u[-1]-u_pred[-1], secant_p) 
-    #print(pAL, 'pAL')
 
-    return np.append(shoot_res, pAL)
+    G = shoot(ode,phase_condition)
+    
+    if phase_condition == None:
+        ode_res = ode(0,u[:-1],par_array)
+        return np.append(ode_res, pAL)
+
+    else:
+
+        par_array[par_index] = u[-1]
+        
+        
+        shoot_res =  G(u[:-2], u[-2],par_array)
+        
+        return np.append(shoot_res, pAL)
 
 
 
-def pseudo_continuation(ode, x0, par_array, par_index, min_par, max_par, max_steps,increase=False):
+def pseudo_continuation(ode, x0, par_array, par_index, min_par, max_par, max_steps, wrapper, phase_condition, increase=False):
     """
     Parameters:
     - ode: The differential equation system to solve.
@@ -183,33 +143,35 @@ def pseudo_continuation(ode, x0, par_array, par_index, min_par, max_par, max_ste
     - par_index: The index of the parameter to continue in par_array.
     - min_par, max_par: The minimum and maximum bounds for the continuation parameter.
     - max_steps: The total number of continuation steps.
+    - wrapper: Function that wraps the shooting method.
+    - phase_condition: The phase condition for the system, can be None
     - increase: Flag indicating the direction of continuation. If True, increases the parameter; otherwise, decreases.
     """
 
     par_step = abs((max_par - min_par) / max_steps) * (1 if increase else -1) # Ensure the step is negative for decreasing
    
-    #sol = np.zeros((len(x0) + 1), max_steps + 1)
     
     #par_array[par_index] = max_par  # Start from the max parameter value
     par_array[par_index] = max_par if not increase else min_par
-    u_old, u_current = find_initial_sols(ode, x0, phase_condition, par_index, par_array, par_step)
-    # sol = np.append(sol,u_old) # u_old = [u1,u2,u3,T,par]
-    #sol[:,0] = u_old
+    u_old, u_current = find_initial_sols(ode, x0, phase_condition, par_index, par_array, par_step, wrapper)
+    
     u_sol = [u_old[:-1]]  #, u_current[:-1]]
     alpha_sol = [u_old[-1]] #, u_current[-1]]
 
     #for i in range(1, max_steps+1):
     run = True
-    i = 0
+
     while run:
         u_pred, delta_u = predict(u_current, u_old) #u_pred = [u1,u2,u3,T,par], delta_u = [du1,du2,du3,dT,dpar]
         updated_value = u_pred[-1]
+        if phase_condition == None:
+            correction_result = root(lambda u: corrector_with_arclength(ode, u, par_index, par_array, u_pred, delta_u, u_old, par_step,phase_condition), u_pred, method='lm',tol=1e-6)
+            
+        else:
+            correction_result = root(lambda u: corrector_with_arclength(ode, u, par_index, par_array, u_pred, delta_u, u_old, par_step,phase_condition), u_pred, method='lm',tol=1e-6)
         
-         
-        #u_corrected = fsolve(lambda u: corrector_with_arclength(ode, u, par_index, par_array, u_pred, delta_u, u_old, par_step), u_pred)#, xtol=1e-6, epsfcn=1e-6)
-        correction_result = root(lambda u: corrector_with_arclength(ode, u, par_index, par_array, u_pred, delta_u, u_old, par_step), u_pred, method='lm',tol=1e-6)
         u_corrected = correction_result.x
-        #print(u_corrected, 'af')
+        
 
         if updated_value < min_par or updated_value > max_par:
             print("Parameter boundary reached or exceeded.")
@@ -221,75 +183,86 @@ def pseudo_continuation(ode, x0, par_array, par_index, min_par, max_par, max_ste
         u_old = u_current
         u_current = u_corrected
         
-        i += 1
-        print(u_current)
         u_sol.append(u_current[:-1])
         alpha_sol.append(u_current[-1])
         
-        #sol[:, i] = u_current
-
-        # print(sol[:, i])
+    for i,sol in enumerate(u_sol):
+        u_sol[i] = sol.tolist() # For plotting purposes, convert to list
 
     return alpha_sol, u_sol
 
-def main():
+
+def pseudo_plotter(par, sol):
+    # Prepare lists to hold the individual components and norms
+    components = [[] for _ in range(len(sol[0]))]  # Assuming all solution vectors are of the same length
+    norms = []
     
-    # steps = 20
-    # initial_guess = np.array([1, 1.0, 4])    #np.array([0.2,0.5,35]) works with mybvp
-    # param_bounds = [2,-1]
-
-    # limit_cycle, param_values, eq = natural_continuation(
-    #     modified_hopf, 
-    #     initial_guess, 
-    #     steps, 
-    #     param_bounds, 
-    #     phase_condition)
-
-    # # #Bifurcation diagram of Limit cycle and equilibria
-    # plotter(param_values, limit_cycle, eq)
-
-
-
-    # ####Pseudo Arc Length Method #####
-
-    max_steps = 200
-    x0 = np.array([1.04, 0.52, -0.52, 10])
-    #x0 = np.array([0, 1, 5])
-    #x0 = np.array([3.4, 3.2, 6.2]) # Brusselator
-    par_array = [2]
-    par_index = 0
-    min_par = -1
-    max_par = 2
-
-    # lim,par, eq = natural_continuation(modified_hopf, x0, 200, [2,-1], phase_condition)
-    # print('natty done')
+    # Iterate over each solution vector
+    for solution in sol:
+        for i, component in enumerate(solution):
+            components[i].append(component)
+        # Compute the norm excluding the last component if there are more than one components
+        norm = scipy.linalg.norm(solution[:-1] if len(solution) > 1 else solution, axis=0)
+        norms.append(norm)
     
+    # Plotting
+    plt.figure(figsize=(10, 6))
+    # Plot the norm
+    plt.plot(par, norms, label='Pseudo Arc Length', marker='o', linestyle='-')
+    # Plot each component
     
-    par, u_sol = pseudo_continuation(hopf_bifurcation_3d, x0, par_array, par_index, min_par, max_par, max_steps, increase=False)
+    for i, component_data in enumerate(components[:-1]):  # Exclude the last component if it's time or similar
+        plt.plot(par, component_data, label=f'u{i+1}', marker='.', linestyle='--')
     
-
-    u1,u2,u3 = [], [], []
-    count = 0
-    while count < len(u_sol):
-        u1.append(u_sol[count][0])
-        u2.append(u_sol[count][1])
-        u3.append(u_sol[count][2])
-        u_sol[count] = np.array(scipy.linalg.norm(u_sol[count][:-1], axis=0, keepdims=True)) #exclding the T value
-        count += 1
-    
-    
-    plt.plot(par, u_sol, label='Pesudo Arc Length')
-    plt.plot(par, u1, label='u1')
-    plt.plot(par, u2, label='u2')
-    plt.plot(par, u3, label='u3')
     plt.xlabel('Parameter', fontsize=12)
-    plt.ylabel('||x||', fontsize=12)
+    plt.ylabel('Solution Magnitude', fontsize=12)
     plt.title('Pseudo Arc Length Method', fontsize=14)
     plt.legend(fontsize=12)
     plt.grid(True)
     plt.show()
 
+def natural_plotter(param_values, solutions):
+    plt.figure(figsize=(12, 6))
+    # Check if solutions is 1D or 2D
+    if solutions.ndim == 1:
+        # If 1D, plot directly
+        plt.plot(param_values, solutions, label='Solution')
+    else:
+        # If 2D, plot as before
+        for i in range(solutions.shape[1]-1):# Exclude the last component if it's time or similar
+            plt.plot(param_values, solutions[:, i], label=f'u{i+1}')
     
+    plt.xlabel('Parameter', fontsize=12)
+    plt.ylabel('Solution Components', fontsize=12)
+    plt.title('Natural Continuation Bifurcation Diagram', fontsize=14)
+    plt.legend(fontsize=12)
+    plt.grid(True)
+    plt.show()
+
+
+
+
+
+def main():
+
+
+    def phase_condition(ode,u0,pars):
+    #return the phase condition which is du1/dt(0) = 0
+        return np.array([ode(0,u0,pars)[0]])
+    
+    x0 = np.array([0.37, 3.5, 7.15])
+    #x0 = np.array([1,1]) # For 1D systems use an extra IC because the phase condition is not needed
+    par_array = [5]  # Start parameter value
+    par_index = 0
+    max_steps = [200, 30]
+    phase_condition = phase_condition
+
+    par_pseudo, sol_pseudo = numerical_continuation(brusselator, 'pseudo', x0, par_array, par_index, [3, 1.5], [200, 30], shoot, fsolve, phase_condition=phase_condition, increase=False)
+    par_nat, sol_nat = numerical_continuation(brusselator, 'natural', x0, par_array, par_index, [3, 1.5], [200, 30], shoot, fsolve, phase_condition=phase_condition, increase=False)
+    
+    natural_plotter(par_nat[1:], sol_nat[1:])
+    pseudo_plotter(par_pseudo, sol_pseudo)
+
 
 
 if __name__ == "__main__":
