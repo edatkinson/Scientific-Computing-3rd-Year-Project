@@ -11,10 +11,6 @@ D = 1.0
 
 
 def setup_finite_difference_matrix(n_points, h, equation_type, bc_left, bc_right, coefficients,method='sparse'):
-    # Setup the diagonals
-    # main_diag = -2.0 * np.ones(n_points) / h**2
-    # upper_diag = np.ones(n_points - 1) / h**2 + sigma / (2 * h) 
-    # lower_diag = np.ones(n_points - 1) / h**2 - sigma / (2 * h) + sigma / h
     N = n_points
 
     main_diag = np.zeros(N)
@@ -23,12 +19,12 @@ def setup_finite_difference_matrix(n_points, h, equation_type, bc_left, bc_right
     
     # Depending on the equation type, set up the diagonals
     if 'diffusion' in equation_type:
-        D = coefficients.get('D')  # Default to 1.0 if not specified
+        D = coefficients.get('D')  
         main_diag[:] = -2 * D / h**2
         upper_diag[:] = lower_diag[:] = D / h**2 
 
     if 'convection' in equation_type:
-        P = coefficients.get('P')  # Default to 0.0 if not specified
+        P = coefficients.get('P') 
         upper_diag += P / (2*h)
         lower_diag -= P / (2*h)
 
@@ -202,9 +198,6 @@ def main():
     print(f"Max dense solution: {max(u_dense):5f}")
     print(f"Max sparse solution: {max(u_sparse):5f}")
     plot_solutions(x, u_dense, u_sparse)
-
-
-
 
     #P = 1
     coefficients_P1 = {'D': 1.0, 'P': 1, 'R': 1}

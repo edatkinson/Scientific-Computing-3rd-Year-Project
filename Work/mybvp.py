@@ -64,7 +64,7 @@ if __name__ == "__main__":
 
     
     # Domain and parameters
-    a, b = 0, 1  # Domain from a to b
+    a, b = -1, 1  # Domain from a to b
     N = 51  # Number of discretization points
     D = 1.0  # Diffusion coefficient
     p = 0.5  # Parameter sigma

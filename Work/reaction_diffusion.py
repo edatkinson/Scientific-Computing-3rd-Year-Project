@@ -75,7 +75,6 @@ def explicit_euler_step(U, D, q, dt, a, b, N, left_BC, right_BC,T):
     elif left_BC.bc == 'robin':
         U_new[0] = U[0] + dt * (left_BC.value(0) * (U[0] - a))
 
-
     for i in range(1, N):
         #introduce t into q
         U_new[i] = U[i] + dt * D * (U[i+1] - 2*U[i] + U[i-1]) / dx**2 + dt * q(t[i], x[i], U_new[i])
@@ -239,7 +238,7 @@ def solve_diffusion(problem):
 
     if method == 'explicit_euler':
         dt = time_span[1] / (len(t_eval) - 1)
-        print(dt)
+        #print(dt)
         U = np.zeros((len(t_eval), N+1))
         U[0] = initial_condition(x)
 
@@ -336,17 +335,16 @@ def main():
     N = 20
     T = 0.5
 
-    q = lambda t, x, U: x*U
-
+    q = lambda t, x, U: x*0
 
     def initial_condition(x):
-        return np.sin(np.pi * (x) / (1))
+        return np.sin(np.pi * (x) / (2))
 
     def left_boundary_condition(t):
-        return t
+        return 0
 
     def right_boundary_condition(t):
-        return t
+        return 0
     dx = (b - a) / N
     time_span = (0, T)
     dt = 0.00125
@@ -358,8 +356,8 @@ def main():
 
     t_eval = np.arange(*time_span, dt)
 
-    boundary_conditions = (BoundaryCondition('dirichlet', value=1),
-                           BoundaryCondition('dirichlet', value=1))
+    boundary_conditions = (BoundaryCondition('dirichlet', value=left_boundary_condition(0)),
+                           BoundaryCondition('dirichlet', value=left_boundary_condition(0)))
 
     start_time = time.time()
     problem_ivp = DiffusionProblem(N,a, b, D, q, initial_condition, boundary_conditions, time_span, t_eval, method='solve_ivp')
@@ -391,14 +389,14 @@ def main():
 
 
     solution_sets = [(x_ivp, t_eval_ivp, U_ivp), (x_euler, t_eval_euler, U_euler), (x, t, U), (x_imp,t_imp,U_imp)]
-    titles = ['IVP Method', 'Explicit Euler Method', 'Linalg Implicit Euler Method ','Fsolve Implicit Euler Method']
+    titles = ['IVP Method', 'Explicit Euler Method', 'Linalg Implicit Euler Method ','Root Implicit Euler Method']
     plot_multiple_solutions_3d(solution_sets, titles)
 
     animate_solution(x_ivp, t_eval_ivp, U_ivp, "IVP Method")
     
     animate_solution(x_euler, t_eval_euler, U_euler, "Explicit Euler Method")
 
-    animate_solution(x_imp, t_imp, U_imp, "Fsolve Implicit Euler Method")
+    animate_solution(x_imp, t_imp, U_imp, "Root Implicit Euler Method")
 
     animate_solution(x, t, U, 'Linalg Implicit Euler Method')
 
@@ -407,7 +405,8 @@ if __name__ == '__main__':
     main()
 
 #TODO: Add IMEX ability from week 22 & t dependent BCs
-#TODO: Fsolve Implicit Euler Method: Investigate why fsolve does not converge well when q is exponential in the non-linear term
+#TODO: Add a Sparse Matrix Solver for the Implicit Euler Method to optimise it
+#TODO: changed to root function 
 
 # Simulates Exercise 1 analytical sol from week 20
 

@@ -35,20 +35,10 @@ def hopf_3dim(t,u,pars):
     dUdt = np.array([du1dt,du2dt,du3dt])
     return dUdt
 
-def modified_hopf(t,u, pars = [1]):
-    """
-    Returns the time derivative of a 2D predator-prey system at a given time.
 
-    :param U: A numpy array of length 2 containing the state variables (u1, u2).
-    :param t: The time.
-    :param pars: A tuple containing the system parameters (beta).
 
-    :returns: A numpy array of length 2 containing the time derivatives of the state variables.
-    """
-
-    if not isinstance(pars, (list, tuple, np.ndarray)):
-        pars = [pars]
-
+def modified_hopf(t,u, pars):
+  
     beta = pars[0]
 
     u1, u2 = u
@@ -58,3 +48,36 @@ def modified_hopf(t,u, pars = [1]):
     return np.array([du1dt, du2dt])
 
 
+def brusselator(t,u,pars):
+    A = 1
+    B = pars[0]
+    u1,u2 = u
+    du1dt = A + u1**2 * u2 - (B + 1) * u1
+    du2dt = B * u1 - u1**2 * u2
+
+    dUdt = np.array([du1dt,du2dt])
+    return dUdt
+
+def hopf_bifurcation_3d(t, X, pars):
+    x, y, z = X
+    beta = pars[0]
+    r_squared = x**2 + y**2 + z**2  # Common term (r^2) in the equations
+    
+    # Compute the derivatives
+    dxdt = beta*x - y - z + x*r_squared - x*r_squared**2
+    dydt = x + beta*y - z + y*r_squared - y*r_squared**2
+    dzdt = x + y + beta*z + z*r_squared - z*r_squared**2
+    
+    return [dxdt, dydt, dzdt]
+
+
+def hopfNormal(t, u, pars):
+    beta = pars[0]
+    sigma = 1
+
+    u1, u2 = u
+
+    du1dt = beta * u1 - u2 + sigma * u1 * (u1 ** 2 + u2 ** 2)
+    du2dt = u1 + beta * u2 + sigma * u2 * (u1 ** 2 + u2 ** 2)
+
+    return [du1dt, du2dt]

@@ -4,9 +4,14 @@ import matplotlib.pyplot as plt
 from scipy.optimize import fsolve, root
 from scipy.integrate import solve_ivp
 from new_ode_solver import solve_ode
+from new_ode_solver import solve_ode
 
-import warnings
 from Equations_Functions import lokta_volterra, hopf, hopf_3dim, modified_hopf
+
+#Ignore runTime warnings
+import warnings
+from scipy.optimize import OptimizeWarning
+warnings.filterwarnings('ignore', category=OptimizeWarning)
 
 #Shoots using the scipy solve_ivp function
 
@@ -28,66 +33,65 @@ def phase_condition(ode,u0,pars):
     #return the phase condition which is du1/dt(0) = 0
     return np.array([ode(0,u0,pars)[0]])
 
-def shoot(f, phase_cond):
-    """
-    Returns a function G for solving a boundary value problem using the shooting method.
+def shoot(f, phase_cond=None):
 
-    :param f: System of ODEs function.
-    :param phase_cond: Boundary conditions function.
-    :returns: Function G calculating differences between actual and guessed boundary conditions.
-    """
+    #Check if there is a phase condition
+    if phase_cond is None:
+        def phase_cond_noop(f, u0, pars):
+            return np.array([])
+        phase_cond = phase_cond_noop
+    elif not callable(phase_cond):
+        raise TypeError("The phase_condition argument must be a callable function or None.")
+
 
     def G(u0, T, pars):
-        """
-        Calculates differences between actual and guessed boundary conditions for a given problem.
-
-        :param u0: Initial guess for the solution.
-        :param T: Final time value.
-        :param pars: Dictionary of parameter values.
-        :returns: Numpy array of differences between actual and guessed boundary conditions.
-        """
-        # Ignore runTime warnings
-        
+    
+    
         # Solve ODE system using Solve IVP 
-        t = np.linspace(0, T, 100)
-        #sol, t = solve_ode(f, u0, t, method='rk4', h=0.01,pars=pars)
-        sol = solve_ivp(f, (0, T), u0, t_eval=t, args=(pars,))
-        #final_sol = sol[-1, :]
-        final_sol = sol.y[:,-1]
-        #print(final_sol)
-        # Calculate differences between actual and estimates
-        return np.append(u0 - final_sol, phase_cond(f, u0, pars=pars))
+        t = np.linspace(0, T, 1000)
+        try:
+            # sol = solve_ivp(f, (0, T), u0, t_eval=t,args=(pars,))
+            # final_sol = sol.y[:,-1]
+            
+            # _ , sol = solve_ode(f, (0,T), u0, h=0.001,method='euler',pars=pars)
+            # final_sol = sol[-1, :]
+            t = np.linspace(0, T, 1000)
+            sol = solve_ode(f, u0, t, "rk4", 0.05, pars)
+            final_sol = sol[:, -1]
+            #print(final_sol)
+            if np.isnan(sol).any():
+                raise ValueError("The ODE solver returned NaN values, which indicates a problem with the ODE integration.")
+            return np.append(u0 - final_sol, phase_cond(f, u0, pars=pars))
+        except Exception as e:
+            raise RuntimeError(f"An error occurred during shooting: {e}")
 
     return G
 
-def orbit_ivp(ode, uinitial, duration,pars):
+
+def orbit(ode, uinitial, duration,pars):
     t = np.linspace(0,duration,150)
     sol = solve_ivp(ode, (0, duration), uinitial,t_eval=t ,args=(pars,))
-    #print(sol.y)
+    
     return sol.y
 
-def limit_cycle(ode,estimate,phase_condition,pars):
-    J = shoot(ode,phase_condition)
-    u0 = estimate[:-1]
-    T = estimate[-1]
-    pars = pars
-    #root finding problem
-    result = fsolve(lambda estimate: J(u0,T, pars),estimate, xtol=1e-6, epsfcn=1e-6)
-    #Isolated_Orbit is the numerical approximation of the limit cycle ODE
-
-    return result
-
-def limit_cycle_finder(ode, estimate, phase_condition, pars):
+def limit_cycle_finder(ode, estimate, phase_condition, pars, test=False):
     G = shoot(ode,phase_condition)
-    #root finding problem
-    result_ivp = fsolve(lambda estimate: G(estimate[:-1], estimate[-1], pars),estimate)
-  
-    ivpisolated_orbit = orbit_ivp(ode, result_ivp[0:-1],result_ivp[-1],pars=pars) #result[-1] is the period of the orbit, result[0:-1] are the initial conditions
-    ivpisolated_orbit = ivpisolated_orbit
-    
-    #Isolated_Orbit is the numerical approximation of the limit cycle ODE
+    try:
+        solution, info, ier, msg = fsolve(lambda estimate: G(estimate[:-1], estimate[-1], pars), estimate, full_output=True)
+        if ier != 1:
+            raise OptimizeWarning(f"Root finder failed to converge: {msg}")
+        if test:
+            print("Root finder convergence: PASSED")
+            print(f"Root finder solution: {solution}")
+        return np.array(solution), orbit(ode, solution[:-1], solution[-1], pars=pars)
 
-    return result_ivp, ivpisolated_orbit
+    except OptimizeWarning as e:
+        warnings.warn(str(e), OptimizeWarning)
+        return solution, orbit(ode, solution[:-1], solution[-1], pars=pars) 
+    except Exception as e:
+        raise RuntimeError(f"An unexpected error occurred: {e}")
+
+
 
 def phase_portrait_plotter(sol):
     plt.plot(sol[0,:], sol[1,:], label='Isolated periodic orbit')

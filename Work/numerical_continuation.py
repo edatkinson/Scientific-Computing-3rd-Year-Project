@@ -9,6 +9,7 @@ from Equations_Functions import hopf, modified_hopf, lokta_volterra, hopf_bifurc
 import warnings 
 from numpy import linalg as LA
 from scipy.optimize import root
+import scipy
 
 '''
 Example of a good interface
@@ -231,121 +232,6 @@ def pseudo_continuation(ode, x0, par_array, par_index, min_par, max_par, max_ste
 
     return alpha_sol, u_sol
 
-# def calculate_par_step(min_par, max_par, num_steps):
-#     return (max_par - min_par) / num_steps
-
-
-# def find_initial_sols(f, u0_guess, phase_condition,par_index, par_array, par_step, vary_par_range):
-#     par0 = par_array[0]
-#     #par_step *= np.sign(vary_par_range[1] - vary_par_range[0])
-#     #print(u0_guess, 'u0_guess')
-
-#     u1,_ = limit_cycle_finder(f,u0_guess,phase_condition,[par0])
-#     u1 = np.append(u1,par0)
-    
-#     par0 += par_step
-#     #print(par0, 'par0' )
-#     u2,_ = limit_cycle_finder(f,u1[:-1],phase_condition,[par0])
-#     u2 = np.append(u2,par0)
-#     return u1, u2
-
-
-    
-
-
-# def pseudo_continuation(f,x0,par_array,vary_par,par_range,steps):
-
-#     '''
-#     params:
-#     f: function to solve
-#     u0: initial guess
-#     par_array: array of parameters
-#     vary_par: index of parameter to vary
-#     range: range of parameter to vary [max,min]
-#     steps: number of steps
-#     '''
-#     def predict(u_current,u_previous):
-#         delta_u = u_current - u_previous #secant
-#         u_pred = u_current + delta_u 
-#         return u_pred, delta_u
-
-#     def corrector_with_arclength(ode,u,par_index,par_array,u_pred,delta_u, u_old): #u is the var to solve for
-#         par_array[par_index] = u[-1]
-#         #print(u[-1])
-#         G = shoot(ode,phase_condition)
-#         shoot_res =  G(u[:-2], u[-2],par_array)
-        
-#         #secant:
-#         secant_u = delta_u[:-1] #u1,u2,u3,T
-#         secant_p = delta_u[-1] #par
-#         # print(secant_p, 'secant_p')
-#         # print(secant_u, 'secant_u')
-        
-#         du =  u_pred[:-1]
-#         dp =  u_pred[-1]
-
-#         # print(du, 'u_pred')
-#         # print(dp, 'p_pred')
-
-#         # print(u_pred, 'u_pred')
-#         # print(u_old, 'u_old')
-#         # print(u, 'u')
-#         ds = LA.norm(secant_u**2 + secant_p**2)
-
-#         pAL = np.dot(u[:-1]-u_pred[:-1], secant_u) + np.dot(u[-1]-u_pred[-1], secant_p) 
-#         #print(pAL, 'pAL')
-
-#         return np.append(shoot_res, pAL)
-
-
-#     min_par = par_range[1]
-#     max_par = par_range[0]
-
-#     par_step = calculate_par_step(par_range[1],par_range[0],steps)
-#     #par_step = 0.015
-#     par_step *= np.sign(min_par - max_par) 
-#     #print(par_step)
-#     sol = np.zeros((len(x0) + 1, steps + 1))
-
-#     u_old, u_current = find_initial_sols(f, x0, phase_condition, vary_par, par_array, par_step,par_range)
-#     #print(u_old, 'u_old')
-#     #print(u_current, 'u_current')
-#     sol[:, 0] = u_old # u_old = [u1,u2,u3,T,par]
-
-#     par_array[vary_par] = max_par #setting param value in par_array to max_par
-
-#     for i in range(1, steps+1):
-#         u_pred, delta_u = predict(u_current, u_old) #u_pred = [u1,u2,u3,T,par], delta_u = [du1,du2,du3,dT,dpar]
-#         par_array[vary_par] = u_pred[-1]
-
-#         #print(par_array[vary_par])
-#         if par_array[vary_par] < min_par or par_array[vary_par] > max_par:
-#             print("Parameter boundary reached or exceeded.")
-#             break
-#         else:
-#             # Update the parameter within the allowable range
-#             par_array[vary_par] = u_pred[-1]
-
-#         # print(u_pred[:-1], 'u_pred')
-#         # print(u_pred[-1], 'p_pred')
-#         # print(delta_u[:-1], 'secant_u')
-#         # print(delta_u[-1], 'p_secant')
-
-
-#         correction_result = root(lambda u: corrector_with_arclength(f, u, vary_par, par_array, u_pred, delta_u, u_old), u_pred, method='lm')
-        
-#         u_corrected = correction_result.x
-#         #print(u_corrected, 'af')
-#         u_old = u_current
-#         u_current = u_corrected
-#         #print(u_current, 'u_current')
-#         #print(u_old, 'u_old')
-#         sol[:, i] = u_current
-#         print(sol[:, i])
-#     return sol[:, :i]
-
-
-
 def main():
     
     # steps = 20
@@ -368,9 +254,8 @@ def main():
 
     max_steps = 200
     x0 = np.array([1.04, 0.52, -0.52, 10])
-    #
     #x0 = np.array([0, 1, 5])
-    #x0 = np.array([3.4, 3.2, 6.2])
+    #x0 = np.array([3.4, 3.2, 6.2]) # Brusselator
     par_array = [2]
     par_index = 0
     min_par = -1
@@ -378,15 +263,10 @@ def main():
 
     # lim,par, eq = natural_continuation(modified_hopf, x0, 200, [2,-1], phase_condition)
     # print('natty done')
-    import scipy
+    
     
     par, u_sol = pseudo_continuation(hopf_bifurcation_3d, x0, par_array, par_index, min_par, max_par, max_steps, increase=False)
     
-    par_range = [2,-1]
-    vary_par = 0
-    steps = 100
-    #print(sol)
-    #sol = pseudo_continuation(modified_hopf,x0,par_array,vary_par,par_range,steps)
 
     u1,u2,u3 = [], [], []
     count = 0
@@ -408,16 +288,6 @@ def main():
     plt.legend(fontsize=12)
     plt.grid(True)
     plt.show()
-
-
-    
-    # plt.plot(par, LA.norm(lim[:,0:1],axis=1),label='natural continuation')
-    # plt.xlabel('beta')
-    # plt.ylabel('||x||')
-    # plt.legend()
-    # plt.show()
-
-    # plotter(par, lim, eq, sol)
 
     
 
