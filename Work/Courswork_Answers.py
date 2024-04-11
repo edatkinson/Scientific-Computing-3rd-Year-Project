@@ -67,8 +67,8 @@ par_nat, sol_nat = numerical_continuation(brusselator,
 
 
 # #Bifurcation diagram of Limit cycle and equilibria
-
-natural_plotter(par_nat, sol_nat)
+#If theres a period, we dont want to plot T, so we set period=True to exclude it
+natural_plotter(par_nat, sol_nat, period=True)
 #add titles n shiz
 
 
@@ -90,7 +90,7 @@ par_pseudo, sol_pseudo = numerical_continuation(brusselator,
     phase_condition=phase_condition, 
     increase=False)
 
-pseudo_plotter(par_pseudo, sol_pseudo) #using solve_ivp instead of solve_ode somehow makes PAL miss the limit cycle
+pseudo_plotter(par_pseudo, sol_pseudo, period=True) #using solve_ivp instead of solve_ode somehow makes PAL miss the limit cycle
 
 # %%
 #Question 2:
@@ -154,7 +154,7 @@ par_pseudo, sol_pseudo = numerical_continuation(hopf_bifurcation_3d,
     phase_condition=phase_condition, 
     increase=False)
 
-pseudo_plotter(par_pseudo, sol_pseudo)
+pseudo_plotter(par_pseudo, sol_pseudo, period=True)
 #Solve_IVP is better than solve_ode in this case due to squared terms in the equations, means x0, bounds and step size need to be chosen carefully
 
 
@@ -202,6 +202,7 @@ plot_solutions(x, u_dense, u_sparse)
 # equation using the approaches from part (a) that you have implemented. In each
 # case, time your code using the %timeit function. Explain which approach is faster
 
+
 no_points = 501
 x = np.linspace(a, b, no_points)  # 501 points in the domain
 dx = x[1] - x[0]  # Step size
@@ -210,7 +211,7 @@ dx = (b-a)/(no_points-1)
 coefficients_possion_dense = {'D': 1.0, 'sigma': 0.05}
 coefficients_possion_sparse = {'D': 1.0, 'sigma': 0.05}
 
-start_time = time.time()
+start_time = time.perf_counter()
 u_dense = solve_dense(setup_rhs_poisson,
     domain=x, 
     h=dx,
@@ -218,11 +219,11 @@ u_dense = solve_dense(setup_rhs_poisson,
     bc_right=bc_right, 
     coefficients=coefficients_possion_dense,
     equation_type='diffusion')
-end_time = time.time()
+end_time = time.perf_counter()
 
 time_dense = end_time - start_time
 
-start_time = time.time()
+start_time = time.perf_counter()
 u_sparse = solve_sparse(setup_rhs_poisson,
     domain=x, 
     h=dx, 
@@ -230,7 +231,7 @@ u_sparse = solve_sparse(setup_rhs_poisson,
     bc_right=bc_right,
     coefficients=coefficients_possion_sparse,
     equation_type='diffusion')
-end_time = time.time()
+end_time = time.perf_counter()
 
 time_sparse = end_time - start_time
 
@@ -244,7 +245,92 @@ print(f'Time taken for sparse: {time_sparse:.4f}')
 plot_solutions(x, u_dense, u_sparse)
 
 
+# %%
+#Question 4:
+# (a) Compute ∆tmax, the maximum size of the time step ∆t that can be used in the
+# explicit Euler method. Print the value of ∆tmax to the screen using four significant
+# figures.
+# (b) Solve this problem using (i) the explicit Euler method with ∆t = 0.5∆tmax and (ii)
+# the implicit Euler method with ∆t = 2∆tmax. In each case, print the value of u(0, T)
+# to the screen using at least four significant digits. Create a single figure with plots
+# of u(0, t).
+
+from reaction_diffusion import solve_diffusion, DiffusionProblem, BoundaryCondition, linalg_implicit
+import numpy as np
+import matplotlib.pyplot as plt
+a = 0
+b = 2 #L
+D = 0.5
+N = 101
+T = 0.5
+
+q = lambda t, x, U: x*0
+
+def initial_condition(x):
+    return 0.5*x*(2-x)
+
+def left_boundary_condition(t):
+    return 1
+
+def right_boundary_condition(t):
+    return 0
+    
+dx = (b - a) / N
+time_span = (0, T)
+#value of dt where explicit euler method is stable critera:
+#dt <= dx**2/(2*D)
+dt_max = ((b-a)/N)**2/ (2 * D)
+print(f'Using the Criterion to maintian stability for the Explicit Euler Method, the Maxium value of Delta t = {dt_max}') 
+dt = 0.5*dt_max
+
+t_eval = np.arange(*time_span, dt)
+boundary_conditions = (BoundaryCondition('neumann', value=left_boundary_condition(0)),
+                           BoundaryCondition('dirichlet', value=right_boundary_condition(0)))
+
+#Explicit Euler
+problem_explicit = DiffusionProblem(N,a, b, D, q, initial_condition, boundary_conditions, time_span, t_eval, method='explicit_euler')
+x_euler, t_eval_euler, U_euler = solve_diffusion(problem_explicit)
+
+#Implicit Euler
+dt = 2*dt_max
+t_eval = np.arange(*time_span, dt)
+problem_implicit = DiffusionProblem(N,a, b, D, q, initial_condition, boundary_conditions, time_span, t_eval, method='implicit_euler')   
+x_imp,t_imp,U_imp = solve_diffusion(problem_implicit)
+
+#Linalg Implicit
+U_linalg,x_linalg,t_linalg = linalg_implicit(D, q, initial_condition, boundary_conditions[0], boundary_conditions[1], a, b, dx, dt, T)
+
+
+
+idx_x0_exp = np.where(x_euler == 0)[0][0]
+# Extract the solution at x = 0 for all times
+u_exp_x0 = U_euler[:, idx_x0_exp]
+# Print the value of u at x = 0 for the final time
+print(f"u(0, T) at T = {t_eval_euler[-1]} is: {u_exp_x0[-1]}")
+
+idx_x0_imp = np.where(x_imp == 0)[0][0]
+# Extract the solution at x = 0 for all times
+u_imp_x0 = U_imp[:, idx_x0_imp]
+# Print the value of u at x = 0 for the final time
+print(f"u(0, T) at T = {t_imp[-1]} is: {u_imp_x0[-1]}")
+
+idx_x0_linalg = np.where(x_linalg == 0)[0][0]
+# Extract the solution at x = 0 for all times
+u_linalg_x0 = U_linalg[:, idx_x0_linalg]
+# Print the value of u at x = 0 for the final time
+#print(f"u(0, T) at T = {t_linalg[-1]} is: {u_linalg_x0[-1]}")
+
+#PLOT
+
+# Plot u(0, t) for all t
+plt.plot(t_eval_euler, u_exp_x0, label='Explicit Euler',linestyle ='--', lw=3)
+plt.plot(t_imp, u_imp_x0, label='Implicit Euler')
+#plt.plot(t_linalg, u_linalg_x0, label='Linalg Implicit')
+plt.xlabel('Time t')
+plt.ylabel('u(0, t)')
+plt.title('U at x = 0 over Time')
+plt.legend()
+plt.show()
 
 
 # %%
-#Question 4:
