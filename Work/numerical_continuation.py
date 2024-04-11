@@ -30,7 +30,6 @@ def numerical_continuation(f, method, x0, par_array, par_index, par_bounds, max_
     
     def wrapper(par_array,u0):
         G = discretization(f,phase_condition)
-        
         return solver(lambda u0: G(u0[:-1],u0[-1],par_array),u0)
 
     max_par, min_par = par_bounds[0], par_bounds[1]
@@ -118,16 +117,13 @@ def corrector_with_arclength(ode,u,par_index,par_array,u_pred,delta_u, u_old,par
     pAL = np.dot(u[:-1]-u_pred[:-1], secant_u) + np.dot(u[-1]-u_pred[-1], secant_p) 
 
     G = shoot(ode,phase_condition)
-    
+    par_array[par_index] = u[-1]
     if phase_condition == None:
+
         ode_res = ode(0,u[:-1],par_array)
         return np.append(ode_res, pAL)
 
     else:
-
-        par_array[par_index] = u[-1]
-        
-        
         shoot_res =  G(u[:-2], u[-2],par_array)
         
         return np.append(shoot_res, pAL)
@@ -182,13 +178,13 @@ def pseudo_continuation(ode, x0, par_array, par_index, min_par, max_par, max_ste
         
         u_old = u_current
         u_current = u_corrected
-        
+        print(u_current)
         u_sol.append(u_current[:-1])
         alpha_sol.append(u_current[-1])
         
     for i,sol in enumerate(u_sol):
         u_sol[i] = sol.tolist() # For plotting purposes, convert to list
-
+    
     return alpha_sol, u_sol
 
 
@@ -208,11 +204,11 @@ def pseudo_plotter(par, sol):
     # Plotting
     plt.figure(figsize=(10, 6))
     # Plot the norm
-    plt.plot(par, norms, label='Pseudo Arc Length', marker='o', linestyle='-')
+    #plt.plot(par, norms, label='Pseudo Arc Length', marker='o', linestyle='-')
     # Plot each component
     
     for i, component_data in enumerate(components[:-1]):  # Exclude the last component if it's time or similar
-        plt.plot(par, component_data, label=f'u{i+1}', marker='.', linestyle='--')
+        plt.plot(par, component_data, label=f'u{i+1}') #, marker='.', linestyle='--')
     
     plt.xlabel('Parameter', fontsize=12)
     plt.ylabel('Solution Magnitude', fontsize=12)
@@ -229,7 +225,7 @@ def natural_plotter(param_values, solutions):
         plt.plot(param_values, solutions, label='Solution')
     else:
         # If 2D, plot as before
-        for i in range(solutions.shape[1]-1):# Exclude the last component if it's time or similar
+        for i in range(solutions.shape[1]):# Exclude the last component if it's time or similar
             plt.plot(param_values, solutions[:, i], label=f'u{i+1}')
     
     plt.xlabel('Parameter', fontsize=12)
@@ -250,15 +246,19 @@ def main():
     #return the phase condition which is du1/dt(0) = 0
         return np.array([ode(0,u0,pars)[0]])
     
-    x0 = np.array([0.37, 3.5, 7.15])
-    #x0 = np.array([1,1]) # For 1D systems use an extra IC because the phase condition is not needed
-    par_array = [5]  # Start parameter value
+    def cubic(t,x, param):
+        f = x**3 - x + param
+        return f
+    
+    #x0 = np.array([0.37, 3.5, 7.15])
+    x0 = np.array([1,-2]) # For 1D systems use an extra IC because the phase condition is not needed
+    par_array = [-2]  # Start parameter value
     par_index = 0
     max_steps = [200, 30]
-    phase_condition = phase_condition
+    phase_condition = None
 
-    par_pseudo, sol_pseudo = numerical_continuation(brusselator, 'pseudo', x0, par_array, par_index, [3, 1.5], [200, 30], shoot, fsolve, phase_condition=phase_condition, increase=False)
-    par_nat, sol_nat = numerical_continuation(brusselator, 'natural', x0, par_array, par_index, [3, 1.5], [200, 30], shoot, fsolve, phase_condition=phase_condition, increase=False)
+    par_pseudo, sol_pseudo = numerical_continuation(cubic, 'pseudo', x0, par_array, par_index, [2, -2], [200, 30], shoot, fsolve, phase_condition=phase_condition, increase=False)
+    par_nat, sol_nat = numerical_continuation(cubic, 'natural', x0, par_array, par_index, [2, -2], [200, 30], shoot, fsolve, phase_condition=phase_condition, increase=False)
     
     natural_plotter(par_nat[1:], sol_nat[1:])
     pseudo_plotter(par_pseudo, sol_pseudo)
