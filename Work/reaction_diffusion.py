@@ -45,6 +45,8 @@ def diffusion_rhs(t, U, D, q, a, b, N, left_BC, right_BC):
     elif left_BC.bc == 'neumann':
 
         dUdt[0] = D * (U[1] - U[0] + dx * left_BC.value) / dx**2
+        #U[0] = U[1] - left_BC.value * dx
+
 
     elif left_BC.bc == 'robin':
         dUdt[0] = (U[1] - U[0]) / dx + left_BC.value * (U[0] - a)
@@ -54,44 +56,35 @@ def diffusion_rhs(t, U, D, q, a, b, N, left_BC, right_BC):
 
     elif right_BC.bc == 'neumann':
         dUdt[-1] = D * (right_BC.value * dx - U[-1] + U[-2]) / dx**2
+        #U[N] = U[N-1] + right_BC.value * dx
 
     elif right_BC.bc == 'robin':
         dUdt[N] = (U[N] - U[N-1]) / dx + right_BC.value * (b - U[N])
 
     return dUdt
 
-def explicit_euler_step(U, D, q, dt, a, b, N, left_BC, right_BC,T):
-    U_new = np.zeros_like(U)
-    
+
+def explicit_euler_step(U, D, q, dt, a, b, N, left_BC, right_BC, T):
     dx = (b - a) / N
-    x = np.linspace(a, b, N+1)
-    t = np.linspace(0, T, N+1)
-    # Apply Left boundary conditions
-    if left_BC.bc == 'dirichlet':
-        #U_new[0] = left_BC.value
-        U[0] = left_BC.value
-    elif left_BC.bc == 'neumann':
-        U_new[0] = U[0] + dt * D * (U[1] - U[0]) / dx**2 + (2 * dt * D * left_BC.value) / dx
-    elif left_BC.bc == 'robin':
-        U_new[0] = U[0] + dt * (left_BC.value(0) * (U[0] - a))
+    U_new = U.copy()
 
+    # Update interior points
     for i in range(1, N):
-        #introduce t into q
-        U_new[i] = U[i] + dt * D * (U[i+1] - 2*U[i] + U[i-1]) / dx**2 + dt * q(t[i], x[i], U_new[i])
+        U_new[i] = U[i] + dt * (D * (U[i+1] - 2*U[i] + U[i-1]) / dx**2 + q(T, (i*dx) + a, U[i]))
 
-    # Apply Right boundary conditions
+    # Apply Neumann BCs on the boundaries
+    if left_BC.bc == 'neumann':
+        U_new[0] = U_new[1] + left_BC.value * dx
+    if right_BC.bc == 'neumann':
+        U_new[-1] = U_new[-2] - right_BC.value * dx
+
+    # Apply Dirichlet BCs on the boundaries
+    if left_BC.bc == 'dirichlet':
+        U_new[0] = left_BC.value
     if right_BC.bc == 'dirichlet':
-        U_new[N] = right_BC.value
-
-    elif right_BC.bc == 'neumann':
-        U_new[N] = U[N] + dt * D * (2*dx*right_BC.value + U[N-1] - U[N]) / dx**2 #+  dt * q(0, x[N], U[N], a, b)
-        #U_new[-1] = U[-1] + dt * D * (U[-1] - U[-2]) / dx**2 + (2 * dt * D * right_BC.value) / dx
-
-    elif right_BC.bc == 'robin':
-        U_new[N] = U[N] + dt * (right_BC.value(0) * (b - U[N]))
+        U_new[-1] = right_BC.value
 
     return U_new
-
 
 
 def linalg_implicit(D, f, u0, bc_left, bc_right, a, b, dx, dt, T):
@@ -238,12 +231,12 @@ def solve_diffusion(problem):
 
     if method == 'explicit_euler':
         dt = time_span[1] / (len(t_eval) - 1)
-        #print(dt)
+        N = len(initial_condition(x)) - 1  # Assuming initial_condition(x) returns an array of length N+1
         U = np.zeros((len(t_eval), N+1))
         U[0] = initial_condition(x)
 
         for i in range(len(t_eval) - 1):
-            U[i+1] = explicit_euler_step(U[i], D, q, dt, a, b, N, boundary_conditions[0], boundary_conditions[1],T=time_span[1])
+            U[i+1] = explicit_euler_step(U[i], D, q, dt, a, b, N, boundary_conditions[0], boundary_conditions[1], t_eval[i])
         print(method)
     elif method == 'solve_ivp':
         t_eval = np.linspace(*time_span, N)
@@ -254,7 +247,7 @@ def solve_diffusion(problem):
         U = U.T
         print(method)
     elif method == 'implicit_euler':
-        dt = 0.01
+        dt = time_span[1] / (len(t_eval) - 1) 
         U,x = diffusion_implicit_euler(D, q, boundary_conditions[0], boundary_conditions[1], initial_condition, dt, dx, time_span[1], a, b)
         print(method)
     else:
