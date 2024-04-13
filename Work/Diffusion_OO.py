@@ -6,6 +6,8 @@ from scipy.optimize import root, fsolve
 from scipy.sparse import diags
 from scipy.sparse.linalg import spsolve
 import scipy.sparse as sp
+import time
+import cProfile
 
 
 
@@ -168,19 +170,28 @@ class BoundaryCondition:
             U[index] = self.value
         elif self.type == 'neumann':
             if A is not None:
-                # Adjust A for Neumann boundary condition at matrix borders
-                A[index, index] = 1 + D * dt / dx**2
-                F[index] += D * dt * self.value / dx
-            elif self.position == 'left':
-                U[0] = U[1] + self.value * dx
-            elif self.position == 'right':
-                U[-1] = U[-2] - self.value * dx
+                # Adjusting A and F for Neumann boundary condition.
+                if self.position == 'left':
+                    A[0, 0] = -1
+                    A[0, 1] = 1
+                    F[0] = self.value * dx
+                elif self.position == 'right':
+                    A[-1, -1] = 1
+                    A[-1, -2] = -1
+                    F[-1] = -self.value * dx
             else:
-                raise ValueError("Unsupported boundary condition type. Choose 'dirichlet' or 'neumann'.")
+                # Assuming a ghost node approach for the explicit method.
+                if self.position == 'left':
+                    U[0] = U[1] - self.value * dx
+                elif self.position == 'right':
+                    U[-1] = U[-2] + self.value * dx
+        else:
+            raise ValueError("Unsupported boundary condition type. Choose 'dirichlet' or 'neumann'.")
+
 
 
 def main():
-    # Example usage:
+#Example usage:
     boundary_conditions = [
         BoundaryCondition('left', 'neumann', 0),
         BoundaryCondition('right', 'neumann', 0)
@@ -189,7 +200,7 @@ def main():
     a = 0
     b = 6
     D = 0.01
-    N = 100
+    N = 200
     T = 100
 
     def source_term(t, x, U):
@@ -200,12 +211,25 @@ def main():
     #Source term defined in the class
     initial_condition = lambda x: np.zeros_like(x)
     dt_max = ((b-a)/N)**2/ (2 * D)
-
     dt = 0.5*dt_max
+    def run_simulation():
+        simulation = DiffusionSimulation(source_term,a, b, D, initial_condition, boundary_conditions, N, (0, T), method='explicit_euler', dt=dt)
+        x, t, U = simulation.solve()
+        return U
+
+    #cProfile.run('run_simulation()')
+
     print(f"Using dt={dt}")
+    # start = time.time()
     simulation = DiffusionSimulation(source_term,a, b, D, initial_condition, boundary_conditions, N, (0, T), method='implicit_euler_root', dt=dt)
+
+
+
     x, t, U = simulation.solve()
+    #end = time.time()
+    #print(f"Time taken: {end-start}")
     #x, U_steady_state = simulation.solve_steady_state()
+
 
     selected_time_steps = [0, len(t) // 4, len(t) // 2, -1]  # Example: start, quarter, half, and final time
 
@@ -222,3 +246,5 @@ def main():
 
 if __name__ == '__main__':
     main()
+
+
