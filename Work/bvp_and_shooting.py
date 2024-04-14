@@ -34,15 +34,6 @@ def phase_condition(ode,u0,pars):
 
 def shoot(f, phase_cond):
 
-    #Check if there is a phase condition
-    # if phase_cond is None:
-    #     def phase_cond_noop(f, u0, pars):
-    #         return np.array([])
-    #     phase_cond = phase_cond_noop
-    # elif not callable(phase_cond):
-    #     raise TypeError("The phase_condition argument must be a callable function or None.")
-
-
     def G(u0, T, pars):
         # Solve ODE system using Solve IVP 
         t = np.linspace(0, T, 1000)

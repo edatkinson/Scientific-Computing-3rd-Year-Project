@@ -5,15 +5,32 @@ import math
 from Equations_Functions import system_of_odes, dx_dt, lokta_volterra, brusselator, hopf_bifurcation_3d, hopf_3dim
 import warnings
 
+import logging
+
+logging.basicConfig(level=logging.WARNING,
+                    format='%(asctime)s - %(levelname)s - %(message)s')
+
+
 
 def euler_step(f, x0, t0, h, *args):
-    
+    if not callable(f):
+        raise ValueError("Function f must be callable")
+    if not isinstance(x0, np.ndarray):
+        raise TypeError("Initial condition x0 must be a numpy ndarray")
+    if not (isinstance(t0, (int, float)) and isinstance(h, (int, float))):
+        raise TypeError("Time t0 and step h must be int or float")
     x1 = x0 + h * f(t0, x0, *args)
     t1 = t0 + h
     return x1, t1
 
 
 def rk4_step(f, x0, t0, h, *args):
+    if not callable(f):
+        raise ValueError("Function f must be callable")
+    if not isinstance(x0, np.ndarray):
+        raise TypeError("Initial condition x0 must be a numpy ndarray")
+    if not (isinstance(t0, (int, float)) and isinstance(h, (int, float))):
+        raise TypeError("Time t0 and step h must be int or float")
     
     k1 = np.array(f(t0, x0, *args))
     k2 = np.array(f(t0 + h / 2, x0 + (h / 2) * k1, *args))
@@ -25,6 +42,10 @@ def rk4_step(f, x0, t0, h, *args):
 
 
 def solve_to(step, f, x1, t1, t2, deltat_max, *args):
+    if not callable(step):
+        raise ValueError("Stepping function must be callable")
+    if not isinstance(t1, (int, float)) or not isinstance(t2, (int, float)) or not isinstance(deltat_max, (int, float)):
+        raise TypeError("Time t1, t2 and deltat_max must be int or float")
 
     while (t1 + deltat_max) < t2:  
         x1, t1 = step(f, x1, t1, deltat_max, *args)
@@ -34,6 +55,21 @@ def solve_to(step, f, x1, t1, t2, deltat_max, *args):
     return x1
 
 def solve_ode(f, x0, t, method, deltat_max, *args):
+
+    if not callable(f):
+        raise ValueError("Function f must be callable")
+    
+    # Validate initial conditions
+    if not isinstance(x0, np.ndarray):
+        raise TypeError("Initial condition x0 must be a numpy ndarray")
+    
+    # Validate time array
+    if not isinstance(t, np.ndarray) or t.ndim != 1:
+        raise TypeError("Time array t must be a one-dimensional numpy ndarray")
+    
+    # Validate deltat_max
+    if not isinstance(deltat_max, (int, float)):
+        raise TypeError("Maximum time step deltat_max must be an int or float")
     
     # Choose the stepping method based on the method argument
     if method == "euler":
@@ -48,14 +84,27 @@ def solve_ode(f, x0, t, method, deltat_max, *args):
     sol[0] = x0
 
     # Solve f at each time step
+
     for i in range(1, len(t)):
+
         t1, t2 = t[i-1], t[i]
         deltat = min(deltat_max, t2 - t1)
         x1 = sol[i-1]
-        
-        # Solve from t1 to t2 with the chosen method
-        x, _ = step(f, x1, t1, deltat, *args)
-        sol[i] = x
+        logging.info(f"Step {i}: t1={t1}, x1={x1}")
+        try:
+            x, _ = step(f, x1, t1, deltat, *args)
+            sol[i] = x
+
+        except ZeroDivisionError:
+            print("Division by zero occurred in the numerical computation.")
+        except OverflowError:
+            logging.warning("Overflow error detected, reducing time step")
+            deltat /= 2  # Halve the time step size
+            x, _ = step(f, x1, t1, deltat, *args)
+            sol[i] = x
+        except Exception as e:
+            logging.error(f"An error occurred at iteration {i}: {e}") # Log the error, giving information about the error and where it occurred
+            raise
 
     return sol.T
 
