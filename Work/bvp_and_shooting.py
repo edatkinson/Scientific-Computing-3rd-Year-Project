@@ -3,8 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt 
 from scipy.optimize import fsolve, root
 from scipy.integrate import solve_ivp
-from new_ode_solver import solve_ode
-from new_ode_solver import solve_ode
+from ode_solver import solve_ode
 
 from Equations_Functions import lokta_volterra, hopf, hopf_3dim, modified_hopf
 
@@ -33,35 +32,35 @@ def phase_condition(ode,u0,pars):
     #return the phase condition which is du1/dt(0) = 0
     return np.array([ode(0,u0,pars)[0]])
 
-def shoot(f, phase_cond=None):
+def shoot(f, phase_cond):
 
     #Check if there is a phase condition
-    if phase_cond is None:
-        def phase_cond_noop(f, u0, pars):
-            return np.array([])
-        phase_cond = phase_cond_noop
-    elif not callable(phase_cond):
-        raise TypeError("The phase_condition argument must be a callable function or None.")
+    # if phase_cond is None:
+    #     def phase_cond_noop(f, u0, pars):
+    #         return np.array([])
+    #     phase_cond = phase_cond_noop
+    # elif not callable(phase_cond):
+    #     raise TypeError("The phase_condition argument must be a callable function or None.")
 
 
     def G(u0, T, pars):
-    
-    
         # Solve ODE system using Solve IVP 
         t = np.linspace(0, T, 1000)
         try:
-            # sol = solve_ivp(f, (0, T), u0, t_eval=t,args=(pars,))
+            # max_step = 0.1
+            # sol = solve_ivp(f, (0, T), u0,args=(pars,), method='RK45',max_step=max_step)
             # final_sol = sol.y[:,-1]
             
-            # _ , sol = solve_ode(f, (0,T), u0, h=0.001,method='euler',pars=pars)
-            # final_sol = sol[-1, :]
             t = np.linspace(0, T, 1000)
-            sol = solve_ode(f, u0, t, "rk4", 0.05, pars)
+            sol = solve_ode(f, u0, t, "rk4", 0.01, pars)
             final_sol = sol[:, -1]
             #print(final_sol)
             if np.isnan(sol).any():
                 raise ValueError("The ODE solver returned NaN values, which indicates a problem with the ODE integration.")
-            return np.append(u0 - final_sol, phase_cond(f, u0, pars=pars))
+            if phase_cond == None:
+                return 0
+            else:
+                return np.append(u0 - final_sol, phase_cond(f, u0, pars))
         except Exception as e:
             raise RuntimeError(f"An error occurred during shooting: {e}")
 
@@ -74,20 +73,20 @@ def orbit(ode, uinitial, duration,pars):
     
     return sol.y
 
-def limit_cycle_finder(ode, estimate, phase_condition, pars, test=False):
-    G = shoot(ode,phase_condition)
+def limit_cycle_finder(ode, estimate, phase_condition, pars,descretization=shoot, solver=fsolve, test=False):
+    G = descretization(ode,phase_condition)
     try:
-        solution, info, ier, msg = fsolve(lambda estimate: G(estimate[:-1], estimate[-1], pars), estimate, full_output=True)
+        solution, info, ier, msg = solver(lambda estimate: G(estimate[:-1], estimate[-1], pars), estimate, full_output=True)
         if ier != 1:
             raise OptimizeWarning(f"Root finder failed to converge: {msg}")
         if test:
             print("Root finder convergence: PASSED")
             print(f"Root finder solution: {solution}")
-        return np.array(solution), orbit(ode, solution[:-1], solution[-1], pars=pars)
+        return np.array(solution)
 
     except OptimizeWarning as e:
         warnings.warn(str(e), OptimizeWarning)
-        return solution, orbit(ode, solution[:-1], solution[-1], pars=pars) 
+        return solution 
     except Exception as e:
         raise RuntimeError(f"An unexpected error occurred: {e}")
 
@@ -116,14 +115,16 @@ def phase_portrait_plotter(sol):
 
 def main():
     lokta_pars = (1,0.1,0.1)
-    orbit, cycle1 = limit_cycle_finder(lokta_volterra, [0.1,0.1,30],phase_condition,lokta_pars)
-    print('The true values of the Lokta-Volterra orbit:', orbit)
+    sol = limit_cycle_finder(lokta_volterra, [0.1,0.2,30],phase_condition,lokta_pars, descretization=shoot, solver=fsolve)
+    cycle1 = orbit(lokta_volterra, sol[:-1], sol[-1], lokta_pars)
+    print('The true values of the Lokta-Volterra orbit:', sol)
     fig1 = phase_portrait_plotter(cycle1) #plot the limit cycle
     plt.show()
 
     hopf_pars = (0.9,-1)
-    orbit, cycle2 = limit_cycle_finder(hopf, [2,1,5],phase_condition,hopf_pars)
-    print('The true values of the Hopf orbit:', orbit)
+    sol = limit_cycle_finder(hopf, [2,1,5],phase_condition,hopf_pars, descretization=shoot, solver=fsolve)
+    cycle2 = orbit(hopf, sol[:-1], sol[-1], hopf_pars)
+    print('The true values of the Hopf orbit:', sol)
     fig2 = phase_portrait_plotter(cycle2) #plot the limit cycle
     plt.show()
 

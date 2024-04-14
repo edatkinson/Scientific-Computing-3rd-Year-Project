@@ -4,7 +4,7 @@ from scipy.sparse import diags
 from scipy.sparse.linalg import spsolve
 from scipy.linalg import solve
 import matplotlib.pyplot as plt
-from reaction_diffusion import BoundaryCondition
+from Diffusion_OO import BoundaryCondition
 
 # Constants
 D = 1.0
@@ -25,17 +25,16 @@ def setup_finite_difference_matrix(n_points, h, equation_type, bc_left, bc_right
 
     if 'convection' in equation_type:
         P = coefficients.get('P') 
-        upper_diag += P / (2*h)
-        lower_diag -= P / (2*h)
+        upper_diag -= P / (2*h)
+        #lower_diag -= P / (2*h)
+        main_diag[1:] += P / h
 
     if 'reaction' in equation_type:
         # For reaction terms, add to main diagonal based on the reaction coefficient
         # This part would be customized based on the specific reaction term
         R = coefficients.get('R')  # Reaction coefficient
-        if R > 0:
-            lower_diag += R / h  # Upwind scheme
-        else:
-            upper_diag -= R / h  # Upwind scheme
+        main_diag += R
+        
         
     
 
@@ -56,40 +55,54 @@ def apply_boundary_conditions(A, bc_left, bc_right, h):
 
     Parameters:
     - A (ndarray or csr_matrix): The finite difference matrix.
-    - bc_left (Class object): The left boundary condition.
-    - bc_right (Class object): The right boundary condition.
+    - bc_left (BoundaryCondition): The left boundary condition.
+    - bc_right (BoundaryCondition): The right boundary condition.
     - h (float): The grid spacing.
     """
-    
-    if bc_left.bc == 'Dirichlet':
+
+    # Apply left boundary condition
+    if bc_left.type.lower() == 'dirichlet':
         A[0, 0] = 1.0
         A[0, 1] = 0.0
-    elif bc_left.bc == 'Neumann':
-        A[0,0] = -1/h
-        A[0,1] = 1/h
+    elif bc_left.type.lower() == 'neumann':
+        A[0, 0] = -1 / h
+        A[0, 1] = 1 / h
 
-    if bc_right.bc == 'Dirichlet':
+    # Apply right boundary condition
+    if bc_right.type.lower() == 'dirichlet':
         A[-1, -1] = 1.0
         A[-1, -2] = 0.0
-    elif bc_right.bc == 'Neumann':
-        A[-1,-2] = -1/h
-        A[-1,-1] = 1/h
+    elif bc_right.type.lower() == 'neumann':
+        A[-1, -2] = -1 / h
+        A[-1, -1] = 1 / h
 
     return A
 
-#Function to setup the right-hand side of the equation
-def apply_rhs_boundary(rhs, h, bc_left, bc_right):
 
-    if bc_left.bc == 'Dirichlet':
+
+def apply_rhs_boundary(rhs, h, bc_left, bc_right):
+    """
+    Applies the boundary conditions to the right-hand side vector.
+
+    Parameters:
+    - rhs (ndarray): The right-hand side vector.
+    - h (float): The grid spacing.
+    - bc_left (BoundaryCondition): The left boundary condition.
+    - bc_right (BoundaryCondition): The right boundary condition.
+    """
+
+    # Apply left boundary condition
+    if bc_left.type.lower() == 'dirichlet':
         rhs[0] = bc_left.value
-    elif bc_left.bc == 'Neumann':
-        rhs[0] = bc_left.value * h # forward difference
-        
-    if bc_right.bc == 'Dirichlet':
+    elif bc_left.type.lower() == 'neumann':
+        rhs[0] += bc_left.value * h  # Modify the first entry accordingly
+
+    # Apply right boundary condition
+    if bc_right.type.lower() == 'dirichlet':
         rhs[-1] = bc_right.value
-    elif bc_right.bc == 'Neumann':
-        rhs[-1] =  bc_right.value *h
-    
+    elif bc_right.type.lower() == 'neumann':
+        rhs[-1] -= bc_right.value * h  # Modify the last entry accordingly
+
     return rhs
 
 def setup_rhs_poisson(n_points, coefficients, h, bc_left, bc_right,domain):
@@ -180,16 +193,22 @@ def plot_solutions(domain, u_dense, u_sparse):
 def main():
     equation_type_Q6 = 'convection-diffusion-reaction' #would need to set up a rhs function for this
     
-    no_points = 81
-    a = -1
+    no_points = 151
+    a = 0
     b = 1
     x = np.linspace(a, b, no_points)  # 501 points in the domain
     dx = x[1] - x[0]  # Step size
     dx = (b-a)/(no_points-1)
 
-    bc_left = BoundaryCondition('Dirichlet', -1)
-    bc_right = BoundaryCondition('Dirichlet', -1)
+    
 
+    boundary_conditions = [
+    BoundaryCondition('left', 'dirichlet', 0),
+    BoundaryCondition('right', 'dirichlet', 0.5)
+]
+    
+    bc_left = boundary_conditions[0]
+    bc_right = boundary_conditions[1]
 
     coefficients_possion = {'D': 1.0, 'sigma': 0.5}
     #Poisson equation

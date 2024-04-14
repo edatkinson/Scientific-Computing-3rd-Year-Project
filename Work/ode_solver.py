@@ -33,8 +33,6 @@ def solve_to(step, f, x1, t1, t2, deltat_max, *args):
     
     return x1
 
-
-
 def solve_ode(f, x0, t, method, deltat_max, *args):
     
     # Choose the stepping method based on the method argument
@@ -117,7 +115,7 @@ def main():
     plt.ylabel('2D ODE')
     plt.legend()
     plt.show()
-    
+
     #Plot Errors
     y0 = np.array([1])
     fig2 = plot_errors(dx_dt, true_solution, y0, t0=0, tf=2)

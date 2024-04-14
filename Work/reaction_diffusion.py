@@ -8,12 +8,8 @@ from scipy.optimize import root
 from scipy.linalg import solve_banded
 from matplotlib.animation import FuncAnimation
 import time
+from Diffusion_OO import BoundaryCondition
 
-
-class BoundaryCondition:
-    def __init__(self, bc, value):
-        self.bc = bc
-        self.value = value
 
 class DiffusionProblem:
     def __init__(self, N, a, b, D, q, initial_condition, boundary_conditions, time_span, t_eval, method):
@@ -39,26 +35,26 @@ def diffusion_rhs(t, U, D, q, a, b, N, left_BC, right_BC):
         dUdt[i] = D * (U[i+1] - 2*U[i] + U[i-1]) / dx**2 + q(t, x[i], U[i])
 
     # Apply boundary conditions
-    if left_BC.bc == 'dirichlet':
+    if left_BC.type == 'dirichlet':
         U[0] = left_BC.value
         
-    elif left_BC.bc == 'neumann':
+    elif left_BC.type == 'neumann':
 
         dUdt[0] = D * (U[1] - U[0] + dx * left_BC.value) / dx**2
         #U[0] = U[1] - left_BC.value * dx
 
 
-    elif left_BC.bc == 'robin':
+    elif left_BC.type == 'robin':
         dUdt[0] = (U[1] - U[0]) / dx + left_BC.value * (U[0] - a)
 
-    if right_BC.bc == 'dirichlet':
+    if right_BC.type == 'dirichlet':
         U[N] = right_BC.value
 
-    elif right_BC.bc == 'neumann':
+    elif right_BC.type == 'neumann':
         dUdt[-1] = D * (right_BC.value * dx - U[-1] + U[-2]) / dx**2
         #U[N] = U[N-1] + right_BC.value * dx
 
-    elif right_BC.bc == 'robin':
+    elif right_BC.type == 'robin':
         dUdt[N] = (U[N] - U[N-1]) / dx + right_BC.value * (b - U[N])
 
     return dUdt
@@ -73,15 +69,15 @@ def explicit_euler_step(U, D, q, dt, a, b, N, left_BC, right_BC, T):
         U_new[i] = U[i] + dt * (D * (U[i+1] - 2*U[i] + U[i-1]) / dx**2 + q(T, (i*dx) + a, U[i]))
 
     # Apply Neumann BCs on the boundaries
-    if left_BC.bc == 'neumann':
-        U_new[0] = U_new[1] + left_BC.value * dx
-    if right_BC.bc == 'neumann':
-        U_new[-1] = U_new[-2] - right_BC.value * dx
+    if left_BC.type == 'neumann':
+        U_new[0] = U_new[1] - left_BC.value * dx
+    if right_BC.type == 'neumann':
+        U_new[-1] = U_new[-2] + right_BC.value * dx
 
     # Apply Dirichlet BCs on the boundaries
-    if left_BC.bc == 'dirichlet':
+    if left_BC.type == 'dirichlet':
         U_new[0] = left_BC.value
-    if right_BC.bc == 'dirichlet':
+    if right_BC.type == 'dirichlet':
         U_new[-1] = right_BC.value
 
     return U_new
@@ -125,13 +121,13 @@ def linalg_implicit(D, f, u0, bc_left, bc_right, a, b, dx, dt, T):
     np.fill_diagonal(A[:, 1:], -r)
 
     # Adjust the matrix for boundary conditions
-    if bc_left.bc == 'neumann':
+    if bc_left.type == 'neumann':
         A[0, 0] = 1 + r  # Adjust the coefficient for Neumann BC
     else:  # Dirichlet
         A[0, :] = 0
         A[0, 0] = 1
 
-    if bc_right.bc == 'neumann':
+    if bc_right.type == 'neumann':
         A[-1, -1] = 1 + r  # Adjust the coefficient for Neumann BC
     else:  # Dirichlet
         A[-1, :] = 0
@@ -145,24 +141,24 @@ def linalg_implicit(D, f, u0, bc_left, bc_right, a, b, dx, dt, T):
         F = u[n-1, :] + dt * non_linear_term
 
         # Apply boundary conditions
-        if bc_left.bc == 'neumann':
+        if bc_left.type == 'neumann':
             F[0] += r * bc_left.value * dx  # Adjust F for Neumann BC
         else:  # Dirichlet
             F[0] = bc_left.value 
         
 
-        if bc_right.bc == 'neumann':
+        if bc_right.type == 'neumann':
             F[-1] += r * bc_right.value * dx  # Adjust F for Neumann BC
         else:  # Dirichlet
             F[-1] = bc_right.value
 
         # Solve the system A*u[n, :] = F
-        u[n, :] = np.linalg.solve(A, F)
+        u[n, :] = np.linalg.solve(A, F) 
 
     return u, x, t
 
 
-def diffusion_implicit_euler(D, q, bc_left, bc_right, u0, dt, dx, T, a, b):
+def diffusion_implicit_euler(D, q, bc_left, bc_right, u0, dt, dx, T, a, b): #Uses a system of ODEs to solve
     Nt = int(T/dt) + 1  # Number of time steps
     Nu = int((b - a)/dx) + 1  # Number of spatial points
     u = np.zeros((Nt, Nu))
@@ -175,7 +171,7 @@ def diffusion_implicit_euler(D, q, bc_left, bc_right, u0, dt, dx, T, a, b):
     # Define the function for fsolve
     def solve_u_next(U_next, U_prev, n):
         non_linear_term = q(n*dt, x, U_next)
-        # Construct the diffusion part using central difference (Laplacian)
+        # Construct the diffusion part using central difference
         diffusion_term = np.zeros_like(U_next)
         diffusion_term[1:-1] = D * (U_next[:-2] - 2*U_next[1:-1] + U_next[2:]) / dx**2
         
@@ -183,16 +179,16 @@ def diffusion_implicit_euler(D, q, bc_left, bc_right, u0, dt, dx, T, a, b):
         F = U_next - U_prev - dt * (diffusion_term + non_linear_term)
 
         # Apply Neumann BC correctly for the left boundary
-        if bc_left.bc == 'dirichlet':
+        if bc_left.type == 'dirichlet':
             F[0] = U_next[0] - bc_left.value
-        elif bc_left.bc == 'neumann':
+        elif bc_left.type == 'neumann':
             # Use a backward difference for left boundary to maintain consistency
             F[0] = (U_next[0] - U_next[1]) / dx - bc_left.value  
 
         # Apply Neumann BC correctly for the right boundary
-        if bc_right.bc == 'dirichlet':
+        if bc_right.type == 'dirichlet':
             F[-1] = U_next[-1] - bc_right.value
-        elif bc_right.bc == 'neumann':
+        elif bc_right.type == 'neumann':
             # Use a forward difference for right boundary to maintain consistency
             F[-1] = (U_next[-1] - U_next[-2]) / dx - bc_right.value
         
@@ -325,8 +321,8 @@ def main():
     a = 0
     b = 2
     D = 1
-    N = 20
-    T = 0.5
+    N = 100
+    T = 10
 
     q = lambda t, x, U: x*0
 
@@ -349,8 +345,10 @@ def main():
 
     t_eval = np.arange(*time_span, dt)
 
-    boundary_conditions = (BoundaryCondition('dirichlet', value=left_boundary_condition(0)),
-                           BoundaryCondition('dirichlet', value=left_boundary_condition(0)))
+    boundary_conditions = [
+        BoundaryCondition('left', 'neumann', 0),
+        BoundaryCondition('right', 'neumann', 0)
+    ]
 
     start_time = time.time()
     problem_ivp = DiffusionProblem(N,a, b, D, q, initial_condition, boundary_conditions, time_span, t_eval, method='solve_ivp')

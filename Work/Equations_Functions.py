@@ -81,3 +81,15 @@ def hopfNormal(t, u, pars):
     du2dt = u1 + beta * u2 + sigma * u2 * (u1 ** 2 + u2 ** 2)
 
     return [du1dt, du2dt]
+
+
+def cubic(t,x, param):
+    f = x**3 - x - param
+    return f
+
+def hopf_example(t,u,pars):#params = (beta)
+    beta = pars
+    du1dt = beta*u[0] - u[1] - u[0] * ((u[0])**2 + (u[1])**2)
+    du2dt = u[0] + beta*u[1] - u[1] * ((u[0])**2 + (u[1])**2) 
+    dUdt = np.array([du1dt,du2dt])
+    return dUdt
