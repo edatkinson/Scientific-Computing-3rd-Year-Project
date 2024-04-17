@@ -19,10 +19,10 @@ class DiffusionSimulation:
         self.initial_condition = initial_condition
         self.boundary_conditions = boundary_conditions
         self.N = N
-        self.dx = (b - a) / N
+        self.dx = (b - a) / (N-1)
         self.time_span = time_span
         self.method = method
-        self.dt = dt if dt is not None else (time_span[1] - time_span[0]) / 100  # default time step
+        self.dt = dt if dt is not None else (time_span[1] - time_span[0]) / 100  # default time step for implicit 
         self.source_term = source_term
 
     def diffusion_rhs(self,t, U):
@@ -52,7 +52,7 @@ class DiffusionSimulation:
         if storage == 'dense':
             U_new = solve(A, F)
         else: 
-            A = sp.csr_matrix(A)
+            A = sp.csr_matrix(A) #
             U_new = spsolve(A, F)
 
         return U_new
@@ -83,7 +83,7 @@ class DiffusionSimulation:
                 non_linear_term = self.source_term(n*self.dt, x, U_next)
                 
                 # Combine the terms to form residual for root finding
-                F = U_next - U_prev - self.dt * (diffusion_term + non_linear_term)
+                F = U_next - U_prev - self.dt * (diffusion_term + non_linear_term) #from notes
                 
                 # Apply boundary conditions to the residual vector
                 self.apply_boundary_conditions(U_next, F=F)
@@ -155,10 +155,11 @@ class DiffusionSimulation:
             return x, np.linspace(self.time_span[0], self.time_span[1], timesteps+1), np.array(U_sol)
 
 class BoundaryCondition:
-    def __init__(self, position, type, value):
+    def __init__(self, position, type, value, coefficients):
         self.position = position
         self.type = type
         self.value = value
+        self.coefficients = coefficients #coefficients for Robin boundary condition (alpha, beta)
 
     def apply(self, U, A=None, F=None, dx=None, D=None, dt=None):
         index = 0 if self.position == 'left' else -1
@@ -185,16 +186,36 @@ class BoundaryCondition:
                     U[0] = U[1] - self.value * dx
                 elif self.position == 'right':
                     U[-1] = U[-2] + self.value * dx
+
+        elif self.type == 'robin':
+            if A is not None:
+                if self.position == 'left':
+                    A[0, 0] = self.coefficients[0] - self.coefficients[1] / dx
+                    A[0, 1] = self.coefficients[1] / dx
+                    F[0] = self.value
+                elif self.position == 'right':
+                    A[-1, -1] = self.coefficients[0] + self.coefficients[1] / dx
+                    A[-1, -2] = -self.coefficients[1] / dx
+                    F[-1] = self.value
+            else:
+                if self.position == 'left': #Explicit method with ghost node approach for robin boundary
+                    U[0] = (self.value - self.coefficients[0] * U[0]) * dx / self.coefficients[1] + U[1]
+                elif self.position == 'right':
+                    U[-1] = (self.value - self.coefficients[0] * U[-1]) * dx / self.coefficients[1] + U[-2]
         else:
             raise ValueError("Unsupported boundary condition type. Choose 'dirichlet' or 'neumann'.")
+
+        
+
+
 
 
 
 def main():
 #Example usage:
     boundary_conditions = [
-        BoundaryCondition('left', 'neumann', 0),
-        BoundaryCondition('right', 'neumann', 0)
+        BoundaryCondition('left', 'neumann', 0, coefficients=(1, 0)),
+        BoundaryCondition('right', 'neumann', 0, coefficients=(1, 0))
     ]
 
     a = 0
@@ -208,7 +229,6 @@ def main():
         #BRATU: np.exp(2*U)
         return ((1-U)**2)*np.exp(-x)
 
-    #Source term defined in the class
     initial_condition = lambda x: np.zeros_like(x)
     dt_max = ((b-a)/N)**2/ (2 * D)
     dt = 0.5*dt_max
@@ -221,7 +241,7 @@ def main():
 
     print(f"Using dt={dt}")
     # start = time.time()
-    simulation = DiffusionSimulation(source_term,a, b, D, initial_condition, boundary_conditions, N, (0, T), method='implicit_euler_root', dt=dt)
+    simulation = DiffusionSimulation(source_term,a, b, D, initial_condition, boundary_conditions, N, (0, T), method='explicit_euler', dt=dt)
 
 
 
