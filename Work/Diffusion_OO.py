@@ -10,7 +10,6 @@ import time
 import cProfile
 
 
-
 class DiffusionSimulation:
     def __init__(self, source_term, a, b, D, initial_condition, boundary_conditions, N, time_span, method, dt=None):
         self.a = a
@@ -29,7 +28,7 @@ class DiffusionSimulation:
         # Initialize the derivative vector
         dUdt = np.zeros_like(U)
         x = np.linspace(self.a, self.b, len(U))
-        # Apply central difference for interior points
+        # Apply central difference for interior points using vector methods instead of loops
         dUdt[1:-1] = self.D * (U[2:] - 2*U[1:-1] + U[:-2]) / self.dx**2 + self.source_term(t, x[1:-1], U[1:-1])
         return dUdt
 
@@ -57,47 +56,42 @@ class DiffusionSimulation:
 
         return U_new
     
-    def diffusion_implicit_euler(self):
-        # Number of time steps and spatial points
+    def diffusion_solver(self, method):
         Nt = int(self.time_span[1] / self.dt) + 1
         Nu = self.N + 1
-        
-        # Initialize solution array with initial condition applied
         u = np.zeros((Nt, Nu))
         x = np.linspace(self.a, self.b, Nu)
         u[0, :] = self.initial_condition(x)
-        
-        # Coefficient for diffusion term
-        r = self.D * self.dt / self.dx**2
 
-        # Loop over each time step
         for n in range(1, Nt):
             U_prev = u[n-1, :]
-            
-            def solve_u_next(U_next):
-                # Calculate diffusion term using central difference
-                diffusion_term = np.zeros_like(U_next)
-                diffusion_term[1:-1] = self.D * (U_next[:-2] - 2*U_next[1:-1] + U_next[2:]) / self.dx**2
-                
-                # Add source term contribution
-                non_linear_term = self.source_term(n*self.dt, x, U_next)
-                
-                # Combine the terms to form residual for root finding
-                F = U_next - U_prev - self.dt * (diffusion_term + non_linear_term) #from notes
-                
-                # Apply boundary conditions to the residual vector
-                self.apply_boundary_conditions(U_next, F=F)
-                
-                return F
-            
-            # Use a root-finding method to get U_next
-            U_next = root(solve_u_next, U_prev).x
-            
-            # Store the calculated U_next
+
+            if method == 'IMEX':
+                # Compute the source term explicitly
+                source_term = self.source_term(n * self.dt, x, U_prev)
+                source_term_func = lambda U_next: source_term  # Explicit source term does not depend on U_next
+            else:
+                # Compute the source term implicitly
+                source_term_func = lambda U_next: self.source_term(n * self.dt, x, U_next)
+
+            U_next = self.solve_u_next(U_prev, source_term_func, x, n)
             u[n, :] = U_next
-        
+
         return x, u
-    
+
+    def solve_u_next(self, U_prev, source_term_func, x, n):
+        def equation(U_next):
+            # Calculate diffusion term using central difference
+            diffusion_term = np.zeros_like(U_next)
+            diffusion_term[1:-1] = self.D * (U_next[:-2] - 2 * U_next[1:-1] + U_next[2:]) / self.dx**2
+            non_linear_term = source_term_func(U_next)
+            F = U_next - U_prev - self.dt * (diffusion_term + non_linear_term)
+            # Apply boundary conditions to the residual vector
+            self.apply_boundary_conditions(U_next, F=F)
+            return F
+
+        # Use a root-finding method to get U_next
+        return root(equation, U_prev).x
 
     def solve_steady_state(self):
     
@@ -135,8 +129,11 @@ class DiffusionSimulation:
         t = np.linspace(self.time_span[0], self.time_span[1], timesteps+1)
         U_sol = [U.copy()]
         current_t = self.time_span[0]
-        if self.method == 'implicit_euler_root':
-            x, u = self.diffusion_implicit_euler()
+        if self.method == 'implicit_root':
+            x, u = self.diffusion_solver(self.method)
+            return x, t, u
+        elif self.method == 'IMEX':
+            x, u = self.diffusion_solver(self.method)
             return x, t, u
         else:
             for i in range(timesteps):
@@ -214,14 +211,14 @@ class BoundaryCondition:
 def main():
 #Example usage:
     boundary_conditions = [
-        BoundaryCondition('left', 'neumann', 0, coefficients=(1, 0)),
-        BoundaryCondition('right', 'neumann', 0, coefficients=(1, 0))
+        BoundaryCondition('left', 'neumann', 0, coefficients=None),
+        BoundaryCondition('right', 'neumann', 0, coefficients=None)
     ]
 
     a = 0
     b = 6
     D = 0.01
-    N = 200
+    N = 50
     T = 100
 
     def source_term(t, x, U):
@@ -241,11 +238,10 @@ def main():
 
     print(f"Using dt={dt}")
     # start = time.time()
-    simulation = DiffusionSimulation(source_term,a, b, D, initial_condition, boundary_conditions, N, (0, T), method='explicit_euler', dt=dt)
-
-
+    simulation = DiffusionSimulation(source_term,a, b, D, initial_condition, boundary_conditions, N, (0, T), method='IMEX', dt=dt)
 
     x, t, U = simulation.solve()
+    
     #end = time.time()
     #print(f"Time taken: {end-start}")
     #x, U_steady_state = simulation.solve_steady_state()
