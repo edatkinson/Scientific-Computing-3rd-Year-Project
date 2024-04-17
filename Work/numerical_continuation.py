@@ -9,6 +9,8 @@ import warnings
 from numpy import linalg as LA
 from scipy.optimize import root
 import scipy
+from sparse_dense_bvp import solve_dense, solve_sparse, plot_solutions, apply_rhs_boundary 
+from Diffusion_OO import BoundaryCondition
 
 '''
 Example of a good interface
@@ -24,19 +26,6 @@ results = continuation(
 '''
 
 def numerical_continuation(f, method, x0, par_array, par_index, par_bounds, max_steps, discretization, solver, phase_condition, increase):
-    # Input type checks
-    if not callable(f):
-        raise ValueError("The function 'f' must be callable.")
-    if not isinstance(initial_guess, np.ndarray):
-        raise ValueError("Initial_guess must be a numpy ndarray.")
-    if not isinstance(steps, int):
-        raise ValueError("Steps must be an integer.")
-    if not isinstance(param_bounds, tuple) or not all(isinstance(b, (int, float)) for b in param_bounds):
-        raise ValueError("Parameter bounds must be a tuple of two numbers (max, min).")
-    if phase_condition is not None and not callable(phase_condition):
-        raise ValueError("Phase condition must be callable or None.")
-    if not callable(wrapper):
-        raise ValueError("Wrapper must be callable.")
     """
     Conducts numerical continuation for a given system of equations.
 
@@ -46,7 +35,7 @@ def numerical_continuation(f, method, x0, par_array, par_index, par_bounds, max_
         x0 (np.ndarray): Initial guess for the variables.
         par_array (list): List of parameters for the system.
         par_index (int): Index of the parameter to continue.
-        par_bounds (tuple): Tuple of (min, max) bounds for the parameter.
+        par_bounds (tuple): Tuple of (Max, Min) bounds for the parameter.
         max_steps (tuple): Maximum steps for continuation.
         discretization: Discretization function.
         solver: Solver function.
@@ -67,7 +56,8 @@ def numerical_continuation(f, method, x0, par_array, par_index, par_bounds, max_
             return solver(lambda u0: G(u0[:-1], u0[-1], par_array), u0)
 
         if method == 'natural':
-            pars, sol = natural_continuation(f, x0, max_steps_nat, par_bounds, phase_condition, wrapper)
+            #pars, sol = natural_continuation(f, x0, max_steps_nat, par_bounds, phase_condition, wrapper)
+            pars, sol = natural_continuation(f, x0, max_steps_nat, par_bounds,par_array,par_index, phase_condition, wrapper)
             return pars, sol 
         elif method == 'pseudo':
             pars, sol = pseudo_continuation(f, x0, par_array, par_index, min_par, max_par, max_steps_PAL, wrapper, phase_condition, increase)
@@ -78,7 +68,9 @@ def numerical_continuation(f, method, x0, par_array, par_index, par_bounds, max_
         warnings.warn(f"An error occurred during numerical continuation: {e}")
         return None, None
 
-def natural_continuation(f, initial_guess, steps, param_bounds, phase_condition, wrapper):
+
+
+def natural_continuation(f, initial_guess, steps, param_bounds,par_array,par_index, phase_condition, wrapper):
     """
     Performs natural continuation on a system to track equilibria or limit cycles across a range of parameter values.
 
@@ -98,6 +90,7 @@ def natural_continuation(f, initial_guess, steps, param_bounds, phase_condition,
         Exception: General exceptions related to solving the system or applying the wrapper, with warnings for specific failures.
     """
     try:
+        par_array[par_index] = param_bounds[0]
         param_values = np.linspace(param_bounds[0], param_bounds[1], steps)
         equilibria = np.zeros((len(param_values), len(initial_guess)))
 
@@ -108,13 +101,15 @@ def natural_continuation(f, initial_guess, steps, param_bounds, phase_condition,
             for index, par in enumerate(param_values[1:], start=0):
                 guess = equilibria[index]
                 try:
-                    equilibria[index+1] = fsolve(lambda u: f(0, u, [par]), guess)
+                    par_array[par_index] = par
+                    equilibria[index+1] = fsolve(lambda u: f(0, u, par_array), guess)
                 except Exception as e:
                     warnings.warn(f"Failed to find equilibrium at parameter {par}: {e}")
         else:
             for index, par in enumerate(param_values[1:], start=0):
                 try:
-                    sol = wrapper([par], equilibria[index])
+                    par_array[par_index] = par
+                    sol = wrapper(par_array, equilibria[index])
                     equilibria[index+1] = sol
                 except Exception as e:
                     warnings.warn(f"Failed to find limit cycle at parameter {par}: {e}")
@@ -145,7 +140,8 @@ def pseudo_continuation(ode, x0, par_array, par_index, min_par, max_par, max_ste
     """
 
     try:
-        par_step = np.sign(max_par - min_par) * (max_par - min_par) / max_steps if increase else -(max_par - min_par) / max_steps
+        #par_step = np.sign(max_par - min_par) * (max_par - min_par) / max_steps if increase else -(max_par - min_par) / max_steps
+        par_step = abs((max_par - min_par) / max_steps) * (1 if increase else -1)
         u_sol, alpha_sol = [], []
 
         # Prepare initial parameters
@@ -169,7 +165,7 @@ def pseudo_continuation(ode, x0, par_array, par_index, min_par, max_par, max_ste
             u_pred, delta_u = predict(current_u, u1)
             updated_param = u_pred[-1]  # updated parameter value after prediction
 
-            correction_result = root(lambda u: corrector(ode, u, par_index, par_array, u_pred, delta_u, current_u, par_step, phase_condition), u_pred, method='lm')
+            correction_result = root(lambda u: corrector(ode, u, par_index, par_array, u_pred, delta_u, current_u, par_step, phase_condition), u_pred, method='lm', tol=1e-6)
             if not correction_result.success:
                 warnings.warn(f"Correction step failed at parameter {updated_param}: {correction_result.message}")
                 break
@@ -374,6 +370,9 @@ def pseudo_plotter(par, sol, period=False):
     plt.show()
 
 
+
+        
+
 def main():
 
 
@@ -387,18 +386,30 @@ def main():
     
     x0 = np.array([0.37, 3.5, 7.15])
     #x0 = np.array([1]) # Continuation is all dependent on the initial condition. Ensure this is right for cubic
-    par_array = [3]  # Start parameter value
-    par_index = 0
+    par_array = [3,1]  # Start parameter value (B & A)
+    par_index = 0 # Index of the parameter to continue
     max_steps = [200, 70]
     phase_condition = phase_condition
 
-    par_pseudo, sol_pseudo = numerical_continuation(brusselator, 'pseudo', x0, par_array, par_index, [3, 1.5], [200, 70], shoot, fsolve, phase_condition=phase_condition, increase=False)
-    #par_nat, sol_nat = numerical_continuation(brusselator, 'natural', x0, par_array, par_index, [3, 1.5], [200, 70], shoot, fsolve, phase_condition=phase_condition, increase=False)
+    #par_pseudo, sol_pseudo = numerical_continuation(brusselator, 'pseudo', x0, par_array, par_index, [3, 1.5], [200, 70], shoot, fsolve, phase_condition=phase_condition, increase=False)
+    par_nat, sol_nat = numerical_continuation(brusselator, 'natural', x0, par_array, par_index, [3, 1.5], [200, 70], shoot, fsolve, phase_condition=phase_condition, increase=False)
     
-    #natural_plotter(par_nat[1:], sol_nat[1:], period=True)
-    pseudo_plotter(par_pseudo, sol_pseudo, period=True)
+    natural_plotter(par_nat[1:], sol_nat[1:], period=True)
+    #pseudo_plotter(par_pseudo, sol_pseudo, period=True)
 
+    # par_pseudo, sol_pseudo = numerical_continuation(brusselator, 
+    # 'pseudo', 
+    # x0, 
+    # par_array, 
+    # par_index, 
+    # [3, 1.5],
+    # [200, 30], 
+    # shoot, 
+    # fsolve, 
+    # phase_condition=phase_condition, 
+    # increase=False)
 
+    # pseudo_plotter(par_pseudo, sol_pseudo, period=True) #using solve_ivp instead of solve_ode somehow makes PAL miss the limit cycle - probably due to adaptive step size
 
 if __name__ == "__main__":
    main()
