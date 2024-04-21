@@ -49,7 +49,7 @@ def modified_hopf(t,u, pars):
 
 
 def brusselator(t,u,pars):
-    A = 1
+    A = pars[1]
     B = pars[0]
     u1,u2 = u
     du1dt = A + u1**2 * u2 - (B + 1) * u1
@@ -93,3 +93,29 @@ def hopf_example(t,u,pars):#params = (beta)
     du2dt = u[0] + beta*u[1] - u[1] * ((u[0])**2 + (u[1])**2) 
     dUdt = np.array([du1dt,du2dt])
     return dUdt
+
+
+
+def setup_rhs_poisson(n_points, coefficients,domain):
+    """
+    Sets up the right-hand side of the Poisson equation.
+
+    Parameters:
+    - n_points (int): Number of grid points.
+    - coefficients (dict): The parameters in the equation in a dictionary.
+    - domain (ndarray): The domain of x values
+
+    Returns:
+    - ndarray: The right-hand side vector.
+    """
+
+    sigma = coefficients.get('sigma')  
+    rhs = -(1 / (np.sqrt(2 * np.pi * sigma**2))) * np.exp(-domain**2 / (2 * sigma**2))
+    return rhs
+
+def setup_rhs_reaction(n_points, coefficients, domain):
+    P = coefficients.get('P') 
+    dx = domain[1] - domain[0]
+    
+    rhs = -np.ones(n_points) * P  
+    return rhs
