@@ -23,7 +23,7 @@ This repository contains a suite of numerical methods designed to solve ordinary
 
 - Supports both sparse and dense matrix operations, selectable based on problem specifics and computational resources.
 
-### Time variant Diffusive PDE solver ('Diffusion_OO')
+### Time variant Diffusive PDE solver (`Diffusion_OO`)
 
 - Solves time variant PDEs for Dirichlet, Neumann and Robin BCs using a range of methods and storage types
 
