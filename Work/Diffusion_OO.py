@@ -8,10 +8,52 @@ from scipy.sparse.linalg import spsolve
 import scipy.sparse as sp
 import time
 import cProfile
+import warnings
 
 
 class DiffusionSimulation:
+    """
+        A class to simulate the diffusion process governed by a partial differential equation.
+
+        Attributes:
+            a (float): The starting point of the spatial domain.
+            b (float): The end point of the spatial domain.
+            D (float): The diffusion coefficient.
+            initial_condition (callable): A function that provides the initial condition of the system.
+            boundary_conditions (list): A list of BoundaryCondition instances defining the boundary conditions.
+            N (int): The number of spatial points in the discretization.
+            dx (float): The spatial step size, calculated from `a`, `b`, and `N`.
+            time_span (tuple): A tuple containing the start and end times for the simulation.
+            method (str): The numerical method to use for the time integration ('explicit_euler', 'implicit_dense', etc.).
+            dt (float, optional): The time step size. If not specified, it is computed from the time_span.
+            source_term (callable): A function representing the source term of the PDE.
+
+        Methods:
+            diffusion_rhs(t, U): Computes the right-hand side of the diffusion equation.
+            apply_boundary_conditions(U, A=None, F=None): Applies the boundary conditions to the solution vector or matrix.
+            explicit_euler_step(t, U): Performs a time step using the explicit Euler method.
+            implicit_euler_step(t, U, storage='dense'): Performs a time step using the implicit Euler method with optional storage mode.
+            diffusion_solver(method): Solves the diffusion equation using IMEX of Implicit_Root method over the entire time span.
+            solve_u_next(U_prev, source_term_func, x, n): Solves for the next time step's solution vector.
+            solve_steady_state(): Solves for the steady state solution of the diffusion equation.
+            solve(): Solves the diffusion equation over the specified time span using the specified method.
+    """
     def __init__(self, source_term, a, b, D, initial_condition, boundary_conditions, N, time_span, method, dt=None):
+        """
+        Initializes the DiffusionSimulation class with the provided parameters and asserts the validity of inputs.
+        """
+        assert callable(source_term), "Source term must be callable."
+        assert isinstance(a, (int, float)), "a must be an integer or float."
+        assert isinstance(b, (int, float)), "b must be an integer or float."
+        assert isinstance(D, (int, float)), "D must be an integer or float."
+        assert callable(initial_condition), "Initial condition must be callable."
+        assert all(isinstance(bc, BoundaryCondition) for bc in boundary_conditions), "Each boundary condition must be an instance of BoundaryCondition."
+        assert isinstance(N, int) and N > 1, "N must be an integer greater than 1."
+        assert isinstance(time_span, tuple) and len(time_span) == 2, "Time span must be a tuple of two elements."
+        assert isinstance(method, str), "Method must be a string."
+        if dt is not None:
+            assert isinstance(dt, (int, float)), "dt must be an integer or float."
+
         self.a = a
         self.b = b
         self.D = D
@@ -25,6 +67,16 @@ class DiffusionSimulation:
         self.source_term = source_term
 
     def diffusion_rhs(self,t, U):
+        """
+        Computes the right-hand side of the diffusion equation using central differences.
+
+        Parameters:
+            t (float): The current time.
+            U (numpy.ndarray): The current values of the solution at each spatial point.
+
+        Returns:
+            numpy.ndarray: The spatial derivatives of U.
+        """
         # Initialize the derivative vector
         dUdt = np.zeros_like(U)
         x = np.linspace(self.a, self.b, len(U))
@@ -33,17 +85,45 @@ class DiffusionSimulation:
         return dUdt
 
     def apply_boundary_conditions(self, U, A=None, F=None):
-        # Apply boundary conditions
+        """
+        Applies the boundary conditions to the solution vector or matrix.
+
+        Parameters:
+            U (numpy.ndarray): The current values of the solution at each spatial point.
+            A (numpy.ndarray, optional): The coefficient matrix (used in implicit methods).
+            F (numpy.ndarray, optional): The modified right-hand side vector after applying source terms.
+        """
         for bc in self.boundary_conditions:
             bc.apply(U, A, F, self.dx, self.D, self.dt)
 
     def explicit_euler_step(self, t,U):
+        """
+        Performs a time step using the explicit Euler method.
+
+        Parameters:
+            t (float): The current time.
+            U (numpy.ndarray): The current values of the solution at each spatial point.
+
+        Returns:
+            numpy.ndarray: The updated values of U after one time step.
+        """
         dUdt = self.diffusion_rhs(t,U)
         U_new = U + self.dt * dUdt
         self.apply_boundary_conditions(U_new)
         return U_new
 
     def implicit_euler_step(self, t,U, storage='dense'):
+        """
+        Performs a time step using the implicit Euler method with the choice of storage scheme for the matrix.
+
+        Parameters:
+            t (float): The current time.
+            U (numpy.ndarray): The current values of the solution at each spatial point.
+            storage (str): The type of storage for the matrix ('dense' or 'sparse').
+
+        Returns:
+            numpy.ndarray: The updated values of U after one time step.
+        """
         N = len(U)
         A = np.eye(N) - self.dt * self.D * (np.diag(np.ones(N-1), -1) - 2*np.diag(np.ones(N), 0) + np.diag(np.ones(N-1), 1)) / self.dx**2
         F = U.copy() + self.dt *self.source_term(t, np.linspace(self.a, self.b, N), U) 
@@ -53,10 +133,23 @@ class DiffusionSimulation:
         else: 
             A = sp.csr_matrix(A) #
             U_new = spsolve(A, F)
+        
+        if storage == 'sparse' and N < 500:
+            warnings.warn("Using a sparse solver for a small system may not be optimal.", RuntimeWarning)
+
 
         return U_new
     
     def diffusion_solver(self, method):
+        """
+        Solves the diffusion equation using the specified method over the entire time span.
+
+        Parameters:
+            method (str): The numerical method to use ('IMEX', 'implicit_root').
+
+        Returns:
+            tuple: The spatial points (x) and the matrix of solutions (u) over time.
+        """
         Nt = int(self.time_span[1] / self.dt) + 1
         Nu = self.N + 1
         u = np.zeros((Nt, Nu))
@@ -70,9 +163,11 @@ class DiffusionSimulation:
                 # Compute the source term explicitly
                 source_term = self.source_term(n * self.dt, x, U_prev)
                 source_term_func = lambda U_next: source_term  # Explicit source term does not depend on U_next
-            else:
+            elif method == 'implicit_root':
                 # Compute the source term implicitly
                 source_term_func = lambda U_next: self.source_term(n * self.dt, x, U_next)
+            else:
+                raise ValueError("Unsupported method. Choose 'IMEX' or 'implicit_root'.")
 
             U_next = self.solve_u_next(U_prev, source_term_func, x, n)
             u[n, :] = U_next
@@ -80,6 +175,18 @@ class DiffusionSimulation:
         return x, u
 
     def solve_u_next(self, U_prev, source_term_func, x, n):
+        """
+        Solves for the next time step's solution vector using a root-finding method.
+
+        Parameters:
+            U_prev (numpy.ndarray): The solution vector from the previous time step.
+            source_term_func (callable): A function that computes the source term.
+            x (numpy.ndarray): The array of spatial points.
+            n (int): The current time step index.
+
+        Returns:
+            numpy.ndarray: The solution vector for the next time step.
+        """
         def equation(U_next):
             # Calculate diffusion term using central difference
             diffusion_term = np.zeros_like(U_next)
@@ -92,9 +199,15 @@ class DiffusionSimulation:
 
         # Use a root-finding method to get U_next
         return root(equation, U_prev).x
+ 
 
     def solve_steady_state(self):
-    
+        """
+        Solves for the steady state solution of the diffusion equation.
+
+        Returns:
+            tuple: The spatial points (x) and the steady state solution.
+        """
         def equations(U):
             d2Udx2 = np.zeros_like(U)
             x = np.linspace(self.a, self.b, len(U))
@@ -122,6 +235,12 @@ class DiffusionSimulation:
     
 
     def solve(self):
+        """
+        Solves the diffusion equation over the specified time span using the specified method.
+
+        Returns:
+            tuple: The spatial points (x), the time points (t), and the matrix of solutions over time.
+        """
         x = np.linspace(self.a, self.b, self.N+1)
         
         U = self.initial_condition(x)
@@ -141,18 +260,25 @@ class DiffusionSimulation:
                     if self.dt > self.dx**2 / (2 * self.D):
                         raise ValueError(f"Explicit Euler method is unstable for dt > dx^2 / (2 * D). Current dt={self.dt} and dx={self.dx}.")
                     U = self.explicit_euler_step(current_t, U)
-                elif self.method == 'implicit_euler_dense':
+                elif self.method == 'implicit_dense':
                     U = self.implicit_euler_step(current_t, U, storage = 'dense')
-                elif self.method == 'implicit_euler_sparse':
+                elif self.method == 'implicit_sparse':
                     U = self.implicit_euler_step(current_t, U, storage = 'sparse')
                 else:
-                    raise ValueError("Unsupported method. Choose 'explicit_euler', 'implicit_euler_dense' or 'implicit_euler_sparse.")
+                    raise ValueError("Unsupported method. Choose 'explicit_euler', 'implicit_dense' or 'implicit_sparse', 'implicit_root' or 'IMEX'.")
                 U_sol.append(U.copy())
                 current_t += self.dt
             return x, np.linspace(self.time_span[0], self.time_span[1], timesteps+1), np.array(U_sol)
 
 class BoundaryCondition:
     def __init__(self, position, type, value, coefficients):
+
+        assert isinstance(position, str), "Position must be a string."
+        assert isinstance(type, str), "Type must be a string."
+        assert isinstance(value, (int, float)), "Value must be an integer or float."
+        if coefficients is not None:
+            assert all(isinstance(c, (int, float)) for c in coefficients), "Coefficients must be a list of numbers."
+
         self.position = position
         self.type = type
         self.value = value
@@ -183,7 +309,6 @@ class BoundaryCondition:
                     U[0] = U[1] - self.value * dx
                 elif self.position == 'right':
                     U[-1] = U[-2] + self.value * dx
-
         elif self.type == 'robin':
             if A is not None:
                 if self.position == 'left':
@@ -201,10 +326,6 @@ class BoundaryCondition:
                     U[-1] = (self.value - self.coefficients[0] * U[-1]) * dx / self.coefficients[1] + U[-2]
         else:
             raise ValueError("Unsupported boundary condition type. Choose 'dirichlet' or 'neumann'.")
-
-        
-
-
 
 
 
@@ -241,7 +362,7 @@ def main():
     simulation = DiffusionSimulation(source_term,a, b, D, initial_condition, boundary_conditions, N, (0, T), method='IMEX', dt=dt)
 
     x, t, U = simulation.solve()
-    
+
     #end = time.time()
     #print(f"Time taken: {end-start}")
     #x, U_steady_state = simulation.solve_steady_state()
