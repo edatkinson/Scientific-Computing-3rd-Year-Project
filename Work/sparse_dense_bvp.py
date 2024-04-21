@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 from Diffusion_OO import BoundaryCondition
 from typing import Callable, Dict, Tuple
 from scipy.optimize import root
+from Equations_Functions import setup_rhs_poisson, setup_rhs_reaction
 
 # Constants
 D = 1.0
@@ -69,8 +70,6 @@ def apply_boundary_conditions(A, bc_left, bc_right, h):
 
     return A
 
-
-
 def apply_rhs_boundary(rhs, h, bc_left, bc_right):
     """
     Applies the boundary conditions to the right-hand side vector.
@@ -96,38 +95,6 @@ def apply_rhs_boundary(rhs, h, bc_left, bc_right):
 
     return rhs
 
-def setup_rhs_poisson(n_points, coefficients, h, bc_left, bc_right,domain):
-    """
-    Sets up the right-hand side of the Poisson equation.
-
-    Parameters:
-    - n_points (int): Number of grid points.
-    - coefficients (dict): The parameters in the equation in a dictionary.
-    - h (float): The grid spacing.
-    - bc_left (Class object): The left boundary condition.
-    - bc_right (Class object): The right boundary condition.
-    - domain (ndarray): The domain of x values
-
-    Returns:
-    - ndarray: The right-hand side vector.
-    """
-
-    sigma = coefficients.get('sigma')  
-    rhs = -(1 / (np.sqrt(2 * np.pi * sigma**2))) * np.exp(-domain**2 / (2 * sigma**2))
-    #Apply boundary conditions
-    rhs = apply_rhs_boundary(rhs, h, bc_left, bc_right)
-
-    return rhs
-
-def setup_rhs_reaction(n_points, coefficients, h, bc_left, bc_right, domain):
-    P = coefficients.get('P')  # Reaction term
-    rhs = -np.ones(n_points) * P  
-
-    rhs = apply_rhs_boundary(rhs, h, bc_left, bc_right)
-    
-    return rhs
-
-
 def solve_dense(rhs,domain, h, bc_left, bc_right, coefficients, equation_type):
     """
     Parameters:
@@ -142,8 +109,8 @@ def solve_dense(rhs,domain, h, bc_left, bc_right, coefficients, equation_type):
         - ndarray: The solution vector u(x).
     """
     A_dense = setup_finite_difference_matrix(len(domain), h, equation_type, bc_left, bc_right,coefficients, method='dense')
-    # rhs = setup_rhs(len(domain), sigma, domain,h, bc_left, bc_right)
-    rhs_term = rhs(len(domain), coefficients,h, bc_left, bc_right, domain)
+    rhs_term = apply_rhs_boundary(rhs(len(domain), coefficients, domain), h, bc_left, bc_right)
+
     u_dense = solve(A_dense, rhs_term)
     return u_dense
 
@@ -154,7 +121,7 @@ def finite_difference_scheme(N,a,b,h, D, q_func, bc_left, bc_right):
         # Evaluate q at interior points
         x_inner = np.linspace(a + h, b - h, N-2)
         q_term = q_func(u[1:-1], x_inner, p)
-        F = D * du2dx2 + q_term
+        F = D * du2dx2 - q_term
 
         # Apply boundary conditions
         F = np.concatenate(([0], F, [0]))  # Start with Dirichlet BCs as placeholders
@@ -195,7 +162,7 @@ def solve_bvp_root(N, a, b, D, q_func, bc_left, bc_right, p):
 # Define the function q(x, u; µ) as needed by the user
 def q_func(u,x, p):
     sigma = p
-    rhs = (1 / (np.sqrt(2 * np.pi * sigma**2))) * np.exp(-x**2 / (2 * sigma**2))
+    rhs = -(1 / (np.sqrt(2 * np.pi * sigma**2))) * np.exp(-x**2 / (2 * sigma**2))
     return rhs
 
 
@@ -216,7 +183,8 @@ def solve_sparse(rhs, domain, h, bc_left, bc_right,coefficients, equation_type):
 
      """
     A_sparse = setup_finite_difference_matrix(len(domain), h, equation_type, bc_left, bc_right, coefficients, method='sparse')
-    rhs_term = rhs(len(domain), coefficients, h, bc_left, bc_right, domain)
+    rhs_term = apply_rhs_boundary(rhs(len(domain), coefficients,domain), h, bc_left, bc_right)
+
     u_sparse = spsolve(A_sparse, rhs_term)
     return u_sparse
 
