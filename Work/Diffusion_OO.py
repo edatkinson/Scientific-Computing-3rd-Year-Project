@@ -271,7 +271,24 @@ class DiffusionSimulation:
             return x, np.linspace(self.time_span[0], self.time_span[1], timesteps+1), np.array(U_sol)
 
 class BoundaryCondition:
+    """
+    A class to represent a boundary condition for the diffusion equation.
+
+    Attributes:
+        position (str): The position of the boundary ('left' or 'right').
+        type (str): The type of boundary condition ('dirichlet' or 'neumann').
+        value (float): The value of the boundary condition.
+        coefficients (list): The coefficients for a Robin boundary condition (alpha, beta).
+    
+    Methods:
+        apply(U, A=None, F=None, dx=None, D=None, dt=None): Applies the boundary condition to the solution vector or matrix.
+        
+
+    """
     def __init__(self, position, type, value, coefficients):
+        """
+        Initializes the BoundaryCondition class with the provided parameters and asserts the validity of inputs.
+        """
 
         assert isinstance(position, str), "Position must be a string."
         assert isinstance(type, str), "Type must be a string."
@@ -285,6 +302,18 @@ class BoundaryCondition:
         self.coefficients = coefficients #coefficients for Robin boundary condition (alpha, beta)
 
     def apply(self, U, A=None, F=None, dx=None, D=None, dt=None):
+        """
+        Applies the boundary condition to the solution vector or matrix.
+        
+        Parameters:
+            U (numpy.ndarray): The current values of the solution at each spatial point.
+            A (numpy.ndarray, optional): The coefficient matrix (used in implicit methods).
+            F (numpy.ndarray, optional): The modified right-hand side vector after applying source terms.
+            dx (float, optional): The spatial step size.
+            D (float, optional): The diffusion coefficient.
+            dt (float, optional): The time step size.
+        """
+
         index = 0 if self.position == 'left' else -1
         if self.type == 'dirichlet':
             if A is not None:
