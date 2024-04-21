@@ -42,6 +42,7 @@ def rk4_step(f, x0, t0, h, *args):
 
 
 def solve_to(step, f, x1, t1, t2, deltat_max, *args):
+    
     if not callable(step):
         raise ValueError("Stepping function must be callable")
     if not isinstance(t1, (int, float)) or not isinstance(t2, (int, float)) or not isinstance(deltat_max, (int, float)):

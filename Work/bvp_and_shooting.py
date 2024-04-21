@@ -12,19 +12,6 @@ import warnings
 from scipy.optimize import OptimizeWarning
 warnings.filterwarnings('ignore', category=OptimizeWarning)
 
-#Shoots using the scipy solve_ivp function
-
-'''
-To find limit cycles, we must solve the periodic boundary value problem (BVP)
-Solve u(0) - u(T) = 0, = u0 - F(u0, T) = 0.
-
-T = 2pi/omega
-
-Hence, limit cycles of (3) can be found by passing (6) along with a suitable initial guess u ̃ 0 to a numerical root finder such as fsolve in Matlab or Python (Scipy) or nlsolve in Julia.
-All of the above can be trivially generalised to arbitrary periodically- forced ODEs of any number of dimensions.
-
-'''
-
 
 #####Root finding problem and shooting########
 
@@ -33,8 +20,8 @@ def phase_condition(ode,u0,pars):
     return np.array([ode(0,u0,pars)[0]])
 
 def shoot(f, phase_cond):
-
     def G(u0, T, pars):
+ 
         # Solve ODE system using Solve IVP 
         t = np.linspace(0, T, 1000)
         try:
@@ -43,11 +30,10 @@ def shoot(f, phase_cond):
             # final_sol = sol.y[:,-1]
             
             t = np.linspace(0, T, 1000)
-            sol = solve_ode(f, u0, t, "rk4", 0.01, pars)
-            final_sol = sol[:, -1]
-            #print(final_sol)
+            sol = solve_ode(f, u0, t, "rk4", 0.01, pars) #solve the the ode from 0 to T 
+            final_sol = sol[:, -1] #Excracr the final solution
             if np.isnan(sol).any():
-                raise ValueError("The ODE solver returned NaN values, which indicates a problem with the ODE integration.")
+                raise ValueError("The ODE solver returned NaN values, which indicates a problem with the ODE integration.") #Check for NaN values and return error if found
             if phase_cond == None:
                 return 0
             else:
@@ -59,12 +45,16 @@ def shoot(f, phase_cond):
 
 
 def orbit(ode, uinitial, duration,pars):
+
+
     t = np.linspace(0,duration,150)
     sol = solve_ivp(ode, (0, duration), uinitial,t_eval=t ,args=(pars,))
     
-    return sol.y
+    return sol.y, t
 
 def limit_cycle_finder(ode, estimate, phase_condition, pars,descretization=shoot, solver=fsolve, test=False):
+   
+
     G = descretization(ode,phase_condition)
     try:
         solution, info, ier, msg = solver(lambda estimate: G(estimate[:-1], estimate[-1], pars), estimate, full_output=True)
@@ -132,5 +122,3 @@ if __name__ == "__main__":
 
 
 
-
-    

@@ -319,15 +319,15 @@ def plot_multiple_solutions_3d(solution_sets, titles):
 
 def main():
     a = 0
-    b = 2
-    D = 1
+    b = 6
+    D = 0.01
     N = 100
-    T = 10
+    T = 100
 
-    q = lambda t, x, U: x*0
+    q = lambda t, x, U: ((1-U)**2)*np.exp(-x)
 
     def initial_condition(x):
-        return np.sin(np.pi * (x) / (2))
+        return 0*x
 
     def left_boundary_condition(t):
         return 0

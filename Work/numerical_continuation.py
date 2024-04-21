@@ -12,18 +12,6 @@ import scipy
 from sparse_dense_bvp import solve_dense, solve_sparse, plot_solutions, apply_rhs_boundary 
 from Diffusion_OO import BoundaryCondition
 
-'''
-Example of a good interface
-results = continuation(
-    myode,
-    x0, # initial state
-    par_to_vary, # parameter to vary
-    step_size, # step size
-    max_steps, # maximum number of steps
-    discretization=discretization, # discretization scheme
-    root_finder=scipy.optimize.fsolve # solver to use
-)
-'''
 
 def numerical_continuation(f, method, x0, par_array, par_index, par_bounds, max_steps, discretization, solver, phase_condition, increase):
     """
@@ -105,6 +93,7 @@ def natural_continuation(f, initial_guess, steps, param_bounds,par_array,par_ind
                     equilibria[index+1] = fsolve(lambda u: f(0, u, par_array), guess)
                 except Exception as e:
                     warnings.warn(f"Failed to find equilibrium at parameter {par}: {e}")
+                    continue
         else:
             for index, par in enumerate(param_values[1:], start=0):
                 try:
@@ -113,6 +102,7 @@ def natural_continuation(f, initial_guess, steps, param_bounds,par_array,par_ind
                     equilibria[index+1] = sol
                 except Exception as e:
                     warnings.warn(f"Failed to find limit cycle at parameter {par}: {e}")
+                    continue
         return param_values, equilibria
     except Exception as e:
         warnings.warn(f"An error occurred in natural continuation: {e}")
@@ -172,13 +162,12 @@ def pseudo_continuation(ode, x0, par_array, par_index, min_par, max_par, max_ste
 
             u_corrected = correction_result.x
             if u_corrected[-1] < min_par or u_corrected[-1] > max_par:
-                warnings.warn("Parameter boundary reached or exceeded.")
+                print("Parameter boundary reached or exceeded.")
                 break
 
             u_sol.append(u_corrected[:-1])
             alpha_sol.append(u_corrected[-1])
             u1, current_u = current_u, u_corrected  # Update the previous and current solutions for next iteration
-
         return alpha_sol, u_sol
     except Exception as e:
         warnings.warn(f"An error occurred in pseudo continuation: {e}")
@@ -228,7 +217,7 @@ def corrector(ode, u, par_index, par_array, u_pred, delta_u, u_old, par_step, ph
         secant_p = delta_u[-1]   
 
         # Calculate the pseudo-arclength constraint
-        pAL = np.dot(u[:-1] - u_pred[:-1], secant_u) + (u[-1] - u_pred[-1]) * secant_p
+        pAL = np.dot(u[:-1] - u_pred[:-1], secant_u) + np.dot(u[-1] - u_pred[-1], secant_p)
 
         # Update parameter array for the new computation
         par_array[par_index] = u[-1]
@@ -370,9 +359,6 @@ def pseudo_plotter(par, sol, period=False):
     plt.show()
 
 
-
-        
-
 def main():
 
 
@@ -384,17 +370,17 @@ def main():
         f = x**3 - x - param
         return f
     
-    x0 = np.array([0.37, 3.5, 7.15])
-    #x0 = np.array([1]) # Continuation is all dependent on the initial condition. Ensure this is right for cubic
-    par_array = [3,1]  # Start parameter value (B & A)
-    par_index = 0 # Index of the parameter to continue
-    max_steps = [200, 70]
-    phase_condition = phase_condition
+    # x0 = np.array([0.37, 3.5, 7.15])
+    # #x0 = np.array([1]) # Continuation is all dependent on the initial condition. Ensure this is right for cubic
+    # par_array = [3,1]  # Start parameter value (B & A)
+    # par_index = 0 # Index of the parameter to continue
+    # max_steps = [200, 70]
+    # phase_condition = phase_condition
 
     #par_pseudo, sol_pseudo = numerical_continuation(brusselator, 'pseudo', x0, par_array, par_index, [3, 1.5], [200, 70], shoot, fsolve, phase_condition=phase_condition, increase=False)
-    par_nat, sol_nat = numerical_continuation(brusselator, 'natural', x0, par_array, par_index, [3, 1.5], [200, 70], shoot, fsolve, phase_condition=phase_condition, increase=False)
+    #par_nat, sol_nat = numerical_continuation(brusselator, 'natural', x0, par_array, par_index, [3, 1.5], [200, 70], shoot, fsolve, phase_condition=phase_condition, increase=False)
     
-    natural_plotter(par_nat[1:], sol_nat[1:], period=True)
+    # natural_plotter(par_nat[1:], sol_nat[1:], period=True)
     #pseudo_plotter(par_pseudo, sol_pseudo, period=True)
 
     # par_pseudo, sol_pseudo = numerical_continuation(brusselator, 
@@ -408,8 +394,23 @@ def main():
     # fsolve, 
     # phase_condition=phase_condition, 
     # increase=False)
+    x0 = [1.04, 0.52, -0.52, 3.63] #starting point from b) 
+    par_array = [1]  # parameter value - becomes redundant anyway as we start from max unless there are more parameters
+    par_index = 0
 
-    # pseudo_plotter(par_pseudo, sol_pseudo, period=True) #using solve_ivp instead of solve_ode somehow makes PAL miss the limit cycle - probably due to adaptive step size
+    par_pseudo, sol_pseudo = numerical_continuation(hopf_bifurcation_3d, 
+        'pseudo', 
+        x0, 
+        par_array, 
+        par_index, 
+        [1, -0.6], #Bounds affect the step size
+        [200, 30], #Max steps: [PAL, Natural]. Also affects the step size  
+        shoot, 
+        fsolve, 
+        phase_condition=phase_condition, 
+        increase=False)
+
+    pseudo_plotter(par_pseudo, sol_pseudo, period=True) #using solve_ivp instead of solve_ode somehow makes PAL miss the limit cycle - probably due to adaptive step size
 
 if __name__ == "__main__":
    main()

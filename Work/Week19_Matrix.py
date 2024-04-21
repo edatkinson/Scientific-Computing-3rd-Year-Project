@@ -58,7 +58,3 @@ plt.ylabel('u(x)')
 plt.legend()
 plt.show()
 
-
-
-
-
