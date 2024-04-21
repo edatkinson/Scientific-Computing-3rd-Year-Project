@@ -17,7 +17,6 @@ This repository contains a suite of numerical methods designed to solve ordinary
 ### Numerical Continuation
 
 - Offers methods for both Natural and Pseudo Arc-Length (PAL) continuation.
-- Handles parameter ranges efficiently with pre-allocated numpy arrays and while loops for dynamic step adjustments.
 
 ### Sparse and Dense BVP Solver (`sparse_dense_bvp`)
 
