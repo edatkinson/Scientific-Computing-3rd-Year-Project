@@ -13,6 +13,28 @@ from Equations_Functions import setup_rhs_poisson, setup_rhs_reaction
 D = 1.0
 
 def setup_finite_difference_matrix(n_points, h, equation_type, bc_left, bc_right, coefficients,method='sparse'):
+    """
+    Constructs a finite difference matrix for various types of partial differential equations (PDEs) such as
+    diffusion, convection, and reaction, based on the specified boundary conditions and equation parameters.
+
+    Args:
+        n_points (int): Number of grid points for discretization.
+        h (float): Distance between each grid point.
+        equation_type (str): Type of PDE to be solved, which could be a combination of 'diffusion',
+                             'convection', or 'reaction'.
+        bc_left (dict): Dictionary specifying the type ('Dirichlet' or 'Neumann') and value of the left boundary condition.
+        bc_right (dict): Dictionary specifying the type ('Dirichlet' or 'Neumann') and value of the right boundary condition.
+        coefficients (dict): Dictionary containing the coefficients used in the PDEs, such as diffusion coefficient 'D'
+                             and convection coefficient 'P'.
+        method (str, optional): Specifies whether to create a 'sparse' matrix or 'dense' matrix. Default is 'sparse'.
+
+    Returns:
+        scipy.sparse.csr_matrix or numpy.ndarray: The finite difference matrix as a sparse or dense matrix,
+                                                  depending on the specified method.
+
+    Raises:
+        ValueError: If an unsupported equation type or matrix construction method is provided.
+    """
     N = n_points
 
     main_diag = np.zeros(N)
@@ -20,24 +42,27 @@ def setup_finite_difference_matrix(n_points, h, equation_type, bc_left, bc_right
     lower_diag = np.zeros(N - 1)
     
     # Depending on the equation type, set up the diagonals
+    if 'diffusion' in equation_type or 'convection' in equation_type or 'reaction' in equation_type:
+        pass
+    else:
+        raise ValueError(f"Unsupported equation type '{equation_type}'. Choose 'diffusion', 'convection', or 'reaction'.")
+
     if 'diffusion' in equation_type:
         D = coefficients.get('D', 1)  
         main_diag[:] = -2 * D / h**2
         upper_diag[:] = lower_diag[:] = D / h**2 
-
     if 'convection' in equation_type:
         P = coefficients.get('P') 
         main_diag[1:] -= P / h
         lower_diag[:] += P / h
-    
+
     # Create the sparse matrix
     if method == 'sparse':
         A = diags([lower_diag, main_diag, upper_diag], [-1, 0, 1], format='csr')
-    else:
+    elif method == 'dense':
         A = np.diag(main_diag) + np.diag(upper_diag, 1) + np.diag(lower_diag, -1)
-
-    # Apply the boundary conditions
-    A = apply_boundary_conditions(A, bc_left, bc_right, h)
+    else:
+        raise ValueError(f"Unsupported method '{method}'. Choose 'sparse' or 'dense'.")
 
     return A
 
@@ -45,7 +70,7 @@ def apply_boundary_conditions(A, bc_left, bc_right, h):
     """
     Applies the boundary conditions to the finite difference matrix A.
 
-    Parameters:
+    Args:
     - A (ndarray or csr_matrix): The finite difference matrix.
     - bc_left (BoundaryCondition): The left boundary condition.
     - bc_right (BoundaryCondition): The right boundary condition.
@@ -59,6 +84,8 @@ def apply_boundary_conditions(A, bc_left, bc_right, h):
     elif bc_left.type.lower() == 'neumann':
         A[0, 0] = -1 / h
         A[0, 1] = 1 / h
+    else:
+        raise ValueError(f"Unsupported left boundary condition type '{bc_left.type}'. Choose 'Dirichlet' or 'Neumann'.")
 
     # Apply right boundary condition
     if bc_right.type.lower() == 'dirichlet':
@@ -67,6 +94,8 @@ def apply_boundary_conditions(A, bc_left, bc_right, h):
     elif bc_right.type.lower() == 'neumann':
         A[-1, -2] = -1 / h
         A[-1, -1] = 1 / h
+    else:
+        raise ValueError(f"Unsupported right boundary condition type '{bc_left.type}'. Choose 'Dirichlet' or 'Neumann'.")
 
     return A
 
@@ -74,7 +103,7 @@ def apply_rhs_boundary(rhs, h, bc_left, bc_right):
     """
     Applies the boundary conditions to the right-hand side vector.
 
-    Parameters:
+    Args:
     - rhs (ndarray): The right-hand side vector.
     - h (float): The grid spacing.
     - bc_left (BoundaryCondition): The left boundary condition.
@@ -86,18 +115,22 @@ def apply_rhs_boundary(rhs, h, bc_left, bc_right):
         rhs[0] = bc_left.value
     elif bc_left.type.lower() == 'neumann':
         rhs[0] += bc_left.value * h  # Modify the first entry accordingly
+    else:
+        raise ValueError(f"Unsupported left boundary condition type '{bc_left.type}'. Choose 'Dirichlet' or 'Neumann'.")
 
     # Apply right boundary condition
     if bc_right.type.lower() == 'dirichlet':
         rhs[-1] = bc_right.value
     elif bc_right.type.lower() == 'neumann':
         rhs[-1] -= bc_right.value * h  # Modify the last entry accordingly
+    else:
+        raise ValueError(f"Unsupported right boundary condition type '{bc_left.type}'. Choose 'Dirichlet' or 'Neumann'.")
 
     return rhs
 
 def solve_dense(rhs,domain, h, bc_left, bc_right, coefficients, equation_type):
     """
-    Parameters:
+    Args:
         - rhs (Callable): Function to setup the right-hand side of the equation.
         - domain (ndarray): The domain of x values.
         - h (float): The grid spacing.
@@ -109,12 +142,34 @@ def solve_dense(rhs,domain, h, bc_left, bc_right, coefficients, equation_type):
         - ndarray: The solution vector u(x).
     """
     A_dense = setup_finite_difference_matrix(len(domain), h, equation_type, bc_left, bc_right,coefficients, method='dense')
+    A_dense = apply_boundary_conditions(A_dense, bc_left, bc_right, h)
     rhs_term = apply_rhs_boundary(rhs(len(domain), coefficients, domain), h, bc_left, bc_right)
 
     u_dense = solve(A_dense, rhs_term)
     return u_dense
 
 def finite_difference_scheme(N,a,b,h, D, q_func, bc_left, bc_right):
+    """
+    Constructs a finite difference scheme for a boundary value problem (BVP) on a one-dimensional domain.
+    
+    This function creates a system of equations that approximates a differential equation using finite
+    difference methods, considering Dirichlet, Neumann, and potentially Robin boundary conditions.
+
+    Args:
+        N (int): Number of grid points.
+        a (float): Left endpoint of the interval.
+        b (float): Right endpoint of the interval.
+        h (float): Step size between grid points.
+        D (float): Diffusion coefficient in the differential equation.
+        q_func (callable): Function representing the non-linear term q(u,x,p), which depends on the
+                           solution u, position x, and parameter p.
+        bc_left (object): Boundary condition at the left endpoint, containing 'value' and 'type'.
+        bc_right (object): Boundary condition at the right endpoint, containing 'value' and 'type'.
+
+    Returns:
+        callable: A function that computes the finite difference approximation of the differential
+                  equation for a given array of solution values `u` and parameter `p`.
+    """
     def system(u, p):
         # Interior points
         du2dx2 = (u[:-2] - 2*u[1:-1] + u[2:]) / h**2
@@ -144,6 +199,26 @@ def finite_difference_scheme(N,a,b,h, D, q_func, bc_left, bc_right):
 
 # Function that represents the discretized system of equations
 def solve_bvp_root(N, a, b, D, q_func, bc_left, bc_right, p):
+    """
+    Solves a boundary value problem (BVP) using finite differences and a root-finding algorithm.
+
+    This function applies a finite difference method to discretize the BVP and then uses a numerical
+    solver to find the roots of the resulting system of equations, thus approximating the solution
+    of the BVP.
+
+    Args:
+        N (int): Number of grid points.
+        a (float): Left endpoint of the interval.
+        b (float): Right endpoint of the interval.
+        D (float): Diffusion coefficient in the differential equation.
+        q_func (callable): Non-linear function in the differential equation.
+        bc_left (object): Object containing value and type of left boundary condition.
+        bc_right (object): Object containing value and type of right boundary condition.
+        p (tuple): Parameters to be passed to the non-linear function and boundary conditions.
+
+    Returns:
+        tuple: A tuple containing the array of grid points `x` and the array of solution values `u`.
+    """
     # Initial guess for the solution
     x = np.linspace(a, b, N)
     u_initial = np.zeros(N)
@@ -170,7 +245,7 @@ def q_func(u,x, p):
 def solve_sparse(rhs, domain, h, bc_left, bc_right,coefficients, equation_type):
     """
 
-    Parameters:
+    Args:
         - rhs (Callable): Function to setup the right-hand side of the equation.
         - domain (ndarray): The domain of x values.
         - h (float): The grid spacing.
@@ -182,7 +257,13 @@ def solve_sparse(rhs, domain, h, bc_left, bc_right,coefficients, equation_type):
         - ndarray: The solution vector u(x).
 
      """
+    #check rhs function
+
+    if callable(rhs) == False:
+        raise TypeError("rhs must be a function")
+
     A_sparse = setup_finite_difference_matrix(len(domain), h, equation_type, bc_left, bc_right, coefficients, method='sparse')
+    A_sparse = apply_boundary_conditions(A_sparse, bc_left, bc_right, h)
     rhs_term = apply_rhs_boundary(rhs(len(domain), coefficients,domain), h, bc_left, bc_right)
 
     u_sparse = spsolve(A_sparse, rhs_term)
@@ -225,6 +306,7 @@ def solve_equation(storage_type: str, rhs: Callable, domain: np.ndarray, h: floa
         raise ValueError(f"Unsupported storage type '{storage_type}'. Choose 'dense' or 'sparse'.")
 
 
+
 def main():
     equation_type_Q6 = 'convection-diffusion-reaction' #would need to set up a rhs function for this
     
@@ -238,8 +320,8 @@ def main():
     p = 0.5
 
     boundary_conditions = [
-    BoundaryCondition('left', 'dirichlet', -1, coefficients=None),
-    BoundaryCondition('right', 'dirichlet', -1, coefficients=None)
+    BoundaryCondition('left', 'dirichlet', 0, coefficients=None),
+    BoundaryCondition('right', 'dirichlet', 0.5, coefficients=None)
 ]
     
     bc_left = boundary_conditions[0]
