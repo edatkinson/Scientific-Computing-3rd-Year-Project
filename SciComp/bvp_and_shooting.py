@@ -129,15 +129,12 @@ def main():
     sol = limit_cycle_finder(lokta_volterra, [0.1,0.2,30],phase_condition,lokta_pars, descretization=shoot, solver=fsolve)
     cycle1 = orbit(lokta_volterra, sol[:-1], sol[-1], lokta_pars)
     print('The true values of the Lokta-Volterra orbit:', sol)
-    fig1 = phase_portrait_plotter(cycle1) #plot the limit cycle
-    plt.show()
+
 
     hopf_pars = (0.9,-1)
     sol = limit_cycle_finder(hopf, [2,1,5],phase_condition,hopf_pars, descretization=shoot, solver=fsolve)
     cycle2 = orbit(hopf, sol[:-1], sol[-1], hopf_pars)
     print('The true values of the Hopf orbit:', sol)
-    fig2 = phase_portrait_plotter(cycle2) #plot the limit cycle
-    plt.show()
 
     t = np.linspace(0,10,100)
     beta,sigma = hopf_pars
