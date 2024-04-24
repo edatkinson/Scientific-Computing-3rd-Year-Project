@@ -13,6 +13,24 @@ logging.basicConfig(level=logging.WARNING,
 
 
 def euler_step(f, x0, t0, h, *args):
+    """
+    Performs a single Euler method step for solving ordinary differential equations (ODEs).
+
+    The Euler method is a first-order numerical procedure for solving ODEs with a given initial value.
+
+    Args:
+        f (callable): The ODE function that calculates derivatives, accepting time t, state x, and any additional parameters.
+        x0 (numpy.ndarray): The initial state from which the step begins.
+        t0 (float): The initial time of the step.
+        h (float): The step size to advance the solution.
+        *args: Additional arguments passed to the ODE function.
+
+    Returns:
+        tuple: A tuple (x1, t1) where x1 is the state at the next time step, and t1 is the next time.
+
+    """
+    if h == 0:
+        return x0, t0
     if not callable(f):
         raise ValueError("Function f must be callable")
     if not isinstance(x0, np.ndarray):
@@ -25,6 +43,23 @@ def euler_step(f, x0, t0, h, *args):
 
 
 def rk4_step(f, x0, t0, h, *args):
+    """
+    Performs a single step of the Runge-Kutta 4th order (RK4) method for solving ODEs.
+
+    RK4 is a more accurate method compared to Euler's, using four intermediate steps to calculate the new state.
+
+    Args:
+        f (callable): The ODE function that calculates derivatives.
+        x0 (numpy.ndarray): The current state vector.
+        t0 (float): The current time.
+        h (float): The step size.
+        *args: Additional parameters passed to the ODE function.
+
+    Returns:
+        tuple: A tuple (x1, t1) where x1 is the new state after taking the step, and t1 is the new time.
+    """
+    if h == 0:
+        return x0, t0  # No change if time step is zero
     if not callable(f):
         raise ValueError("Function f must be callable")
     if not isinstance(x0, np.ndarray):
@@ -42,6 +77,21 @@ def rk4_step(f, x0, t0, h, *args):
 
 
 def solve_to(step, f, x1, t1, t2, deltat_max, *args):
+    """
+    Solves an ODE from time t1 to t2 using a specified stepping function, ensuring that no step exceeds deltat_max.
+
+    Args:
+        step (callable): The stepping function (like euler_step or rk4_step) to be used for advancing the solution.
+        f (callable): The ODE function.
+        x1 (numpy.ndarray): The initial state at time t1.
+        t1 (float): The starting time.
+        t2 (float): The ending time.
+        deltat_max (float): The maximum allowed time step size.
+        *args: Additional parameters passed to the ODE function.
+
+    Returns:
+        numpy.ndarray: The state vector at time t2.
+    """
     
     if not callable(step):
         raise ValueError("Stepping function must be callable")
@@ -56,6 +106,23 @@ def solve_to(step, f, x1, t1, t2, deltat_max, *args):
     return x1
 
 def solve_ode(f, x0, t, method, deltat_max, *args):
+    """
+    Solves an ODE over a time grid t using a specified numerical method.
+
+    This function provides a higher-level interface to solve ODEs using either the Euler method or RK4 method,
+    based on the `method` argument.
+
+    Args:
+        f (callable): The ODE function that calculates derivatives.
+        x0 (numpy.ndarray): The initial state vector.
+        t (numpy.ndarray): The array of time points for which to solve the ODE.
+        method (str): The numerical method to use ('euler' or 'rk4').
+        deltat_max (float): The maximum allowed time step size.
+        *args: Additional parameters passed to the ODE function.
+
+    Returns:
+        numpy.ndarray: A 2D array where each column is the state at a corresponding time in t.
+    """
 
     if not callable(f):
         raise ValueError("Function f must be callable")
@@ -158,7 +225,7 @@ def main():
     pars = []
     T = 20
     t = np.linspace(0, T, 1000)
-    sol = solve_ode(system_of_odes, x0, t, "rk4", 0.05)
+    sol = solve_ode(dx_dt, x0, t, "rk4", 0.05,pars)
 
     plt.plot(t, sol[0, :], label='x')
     plt.xlabel('Time')
