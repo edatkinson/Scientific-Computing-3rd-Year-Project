@@ -94,7 +94,7 @@ class DiffusionSimulation:
             F (numpy.ndarray, optional): The modified right-hand side vector after applying source terms.
         """
         for bc in self.boundary_conditions:
-            bc.apply(U, A, F, self.dx, self.D, self.dt)
+            bc.apply(U, A, F, self.dx, self.D, self.dt) #apply BCs
 
     def explicit_euler_step(self, t,U):
         """
@@ -108,7 +108,7 @@ class DiffusionSimulation:
             numpy.ndarray: The updated values of U after one time step.
         """
         dUdt = self.diffusion_rhs(t,U)
-        U_new = U + self.dt * dUdt
+        U_new = U + self.dt * dUdt # Update U using the explicit Euler method
         self.apply_boundary_conditions(U_new)
         return U_new
 
@@ -164,11 +164,11 @@ class DiffusionSimulation:
         if storage == 'dense':
             A = np.eye(N) - self.dt * self.D * (np.diag(np.ones(N-1), -1) - 2*np.diag(np.ones(N), 0) + np.diag(np.ones(N-1), 1)) / self.dx**2
             self.apply_boundary_conditions(U, A, F)
-            U_new = solve(A, F)
+            U_new = solve(A, F) #solve using dense matrix
         else:
             A_sparse = self.create_sparse_matrix(N, self.dt, self.D, self.dx)
             self.apply_boundary_conditions(U, A_sparse, F)
-            U_new = spsolve(A_sparse, F)
+            U_new = spsolve(A_sparse, F) #solve using sparse matrix
 
         if storage == 'sparse' and N < 500:
             warnings.warn("Using a sparse solver for a small system may not be optimal.", RuntimeWarning)
@@ -291,7 +291,7 @@ class DiffusionSimulation:
             x, u = self.diffusion_solver(self.method)
             return x, t, u
         else:
-            for i in range(timesteps):
+            for i in range(timesteps): #time stepping
                 if self.method == 'explicit_euler':
                     if self.dt > self.dx**2 / (2 * self.D):
                         raise ValueError(f"Explicit Euler method is unstable for dt > dx^2 / (2 * D). Current dt={self.dt} and dx={self.dx}.")

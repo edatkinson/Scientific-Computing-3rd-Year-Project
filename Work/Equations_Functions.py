@@ -97,25 +97,12 @@ def hopf_example(t,u,pars):#params = (beta)
 
 
 def setup_rhs_poisson(n_points, coefficients,domain):
-    """
-    Sets up the right-hand side of the Poisson equation.
-
-    Parameters:
-    - n_points (int): Number of grid points.
-    - coefficients (dict): The parameters in the equation in a dictionary.
-    - domain (ndarray): The domain of x values
-
-    Returns:
-    - ndarray: The right-hand side vector.
-    """
 
     sigma = coefficients.get('sigma')  
     rhs = -(1 / (np.sqrt(2 * np.pi * sigma**2))) * np.exp(-domain**2 / (2 * sigma**2))
     return rhs
 
 def setup_rhs_reaction(n_points, coefficients, domain):
-    P = coefficients.get('P') 
-    dx = domain[1] - domain[0]
-    
+    P = coefficients.get('P')     
     rhs = -np.ones(n_points) * P  
     return rhs
