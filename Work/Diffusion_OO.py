@@ -3,7 +3,7 @@ from scipy.integrate import solve_ivp
 from scipy.linalg import solve
 import matplotlib.pyplot as plt
 from scipy.optimize import root, fsolve
-from scipy.sparse import diags
+from scipy.sparse import diags, eye
 from scipy.sparse.linalg import spsolve
 import scipy.sparse as sp
 import time
@@ -25,20 +25,21 @@ class DiffusionSimulation:
             dx (float): The spatial step size, calculated from `a`, `b`, and `N`.
             time_span (tuple): A tuple containing the start and end times for the simulation.
             method (str): The numerical method to use for the time integration ('explicit_euler', 'implicit_dense', etc.).
-            dt (float, optional): The time step size. If not specified, it is computed from the time_span.
+            dt (float): The time step size.
             source_term (callable): A function representing the source term of the PDE.
 
         Methods:
             diffusion_rhs(t, U): Computes the right-hand side of the diffusion equation.
             apply_boundary_conditions(U, A=None, F=None): Applies the boundary conditions to the solution vector or matrix.
             explicit_euler_step(t, U): Performs a time step using the explicit Euler method.
+            create_sparse_matrix(N, dt, D, dx): Creates a sparse matrix for the implicit Euler method.
             implicit_euler_step(t, U, storage='dense'): Performs a time step using the implicit Euler method with optional storage mode.
             diffusion_solver(method): Solves the diffusion equation using IMEX of Implicit_Root method over the entire time span.
             solve_u_next(U_prev, source_term_func, x, n): Solves for the next time step's solution vector.
             solve_steady_state(): Solves for the steady state solution of the diffusion equation.
             solve(): Solves the diffusion equation over the specified time span using the specified method.
     """
-    def __init__(self, source_term, a, b, D, initial_condition, boundary_conditions, N, time_span, method, dt=None):
+    def __init__(self, source_term, a, b, D, initial_condition, boundary_conditions, N, time_span, method, dt):
         """
         Initializes the DiffusionSimulation class with the provided parameters and asserts the validity of inputs.
         """
@@ -51,8 +52,7 @@ class DiffusionSimulation:
         assert isinstance(N, int) and N > 1, "N must be an integer greater than 1."
         assert isinstance(time_span, tuple) and len(time_span) == 2, "Time span must be a tuple of two elements."
         assert isinstance(method, str), "Method must be a string."
-        if dt is not None:
-            assert isinstance(dt, (int, float)), "dt must be an integer or float."
+        assert isinstance(dt, (int, float)), "dt must be an integer or float."
 
         self.a = a
         self.b = b
@@ -63,7 +63,7 @@ class DiffusionSimulation:
         self.dx = (b - a) / (N-1)
         self.time_span = time_span
         self.method = method
-        self.dt = dt if dt is not None else (time_span[1] - time_span[0]) / 100  # default time step for implicit 
+        self.dt = dt
         self.source_term = source_term
 
     def diffusion_rhs(self,t, U):
@@ -112,6 +112,41 @@ class DiffusionSimulation:
         self.apply_boundary_conditions(U_new)
         return U_new
 
+    def create_sparse_matrix(self, N, dt, D, dx):
+        """
+        Constructs a sparse matrix representing the discretized form of a diffusion operator
+        using the finite difference method, suitable for numerical PDE simulations.
+
+        This method creates a sparse matrix that combines the identity matrix and a scaled Laplacian matrix,
+        used primarily in solving time-dependent diffusion equations numerically.
+
+        Args:
+            N (int): Number of grid points, determining the size of the matrix.
+            dt (float): Time step size used in the discretization of the time derivative.
+            D (float): Diffusion coefficient, a parameter of the diffusion equation.
+            dx (float): Spatial step size used in the discretization of the spatial derivative.
+
+        Returns:
+            scipy.sparse.csr_matrix: A sparse matrix in Compressed Sparse Row format. This matrix can be used
+                                    in numerical simulations to represent the linear part of the discretized
+                                    PDE, effectively combining the identity matrix with a diffusion term scaled
+                                    appropriately by time and spatial step sizes.
+        """
+        main_diag = -2 * np.ones(N)
+        off_diag = np.ones(N - 1)
+        
+        diagonals = [main_diag, off_diag, off_diag]
+        offsets = [0, -1, 1]
+        laplacian = diags(diagonals, offsets, format='csr')
+        
+        laplacian_scaled = ((-dt * D) / dx**2) * laplacian
+        
+        identity = eye(N, format='csr')
+        
+        A = identity + laplacian_scaled
+        
+        return A
+ 
     def implicit_euler_step(self, t,U, storage='dense'):
         """
         Performs a time step using the implicit Euler method with the choice of storage scheme for the matrix.
@@ -125,15 +160,16 @@ class DiffusionSimulation:
             numpy.ndarray: The updated values of U after one time step.
         """
         N = len(U)
-        A = np.eye(N) - self.dt * self.D * (np.diag(np.ones(N-1), -1) - 2*np.diag(np.ones(N), 0) + np.diag(np.ones(N-1), 1)) / self.dx**2
         F = U.copy() + self.dt *self.source_term(t, np.linspace(self.a, self.b, N), U) 
-        self.apply_boundary_conditions(U, A, F)
         if storage == 'dense':
+            A = np.eye(N) - self.dt * self.D * (np.diag(np.ones(N-1), -1) - 2*np.diag(np.ones(N), 0) + np.diag(np.ones(N-1), 1)) / self.dx**2
+            self.apply_boundary_conditions(U, A, F)
             U_new = solve(A, F)
-        else: 
-            A = sp.csr_matrix(A) #
-            U_new = spsolve(A, F)
-        
+        else:
+            A_sparse = self.create_sparse_matrix(N, self.dt, self.D, self.dx)
+            self.apply_boundary_conditions(U, A_sparse, F)
+            U_new = spsolve(A_sparse, F)
+
         if storage == 'sparse' and N < 500:
             warnings.warn("Using a sparse solver for a small system may not be optimal.", RuntimeWarning)
 
@@ -285,7 +321,7 @@ class BoundaryCondition:
         
 
     """
-    def __init__(self, position, type, value, coefficients):
+    def __init__(self, position, type, value, coefficients=None):
         """
         Initializes the BoundaryCondition class with the provided parameters and asserts the validity of inputs.
         """
@@ -380,7 +416,7 @@ def main():
     dt_max = ((b-a)/N)**2/ (2 * D)
     dt = 0.5*dt_max
     def run_simulation():
-        simulation = DiffusionSimulation(source_term,a, b, D, initial_condition, boundary_conditions, N, (0, T), method='explicit_euler', dt=dt)
+        simulation = DiffusionSimulation(source_term,a, b, D, initial_condition, boundary_conditions, N, (0, T), 'explicit_euler', dt)
         x, t, U = simulation.solve()
         return U
 
@@ -388,7 +424,7 @@ def main():
 
     print(f"Using dt={dt}")
     # start = time.time()
-    simulation = DiffusionSimulation(source_term,a, b, D, initial_condition, boundary_conditions, N, (0, T), method='IMEX', dt=dt)
+    simulation = DiffusionSimulation(source_term,a, b, D, initial_condition, boundary_conditions, N, (0, T), 'implicit_sparse', dt)
 
     x, t, U = simulation.solve()
 
