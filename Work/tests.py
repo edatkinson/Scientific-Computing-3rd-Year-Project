@@ -9,6 +9,9 @@ from sparse_dense_bvp import *
 from numerical_continuation import *
 from scipy.sparse import diags, csr_matrix
 
+import warnings
+from scipy.sparse import SparseEfficiencyWarning
+warnings.simplefilter('ignore', SparseEfficiencyWarning)
 
 import unittest
 
@@ -131,7 +134,7 @@ class TestODEAnalysisFunctions(unittest.TestCase):
         
         # Use an initial guess close to the expected steady state
         initial_guess = np.array([0.1])
-        T = 1  # Period of the limit cycle (dummy value for the test)
+        T = 1  # Period of the limit cycle 
         
         # The expected result should be close to zero since the system should decay to zero
         result = G(initial_guess, T, self.pars)
@@ -321,6 +324,80 @@ class TestFiniteDifferenceSetup(unittest.TestCase):
         with self.assertRaises(TypeError):
             solve_equation('sparse', lambda n_points, coefficients, domain: np.ones(n_points), np.linspace(-1, 1, self.n_points), self.h, self.bc_left, self.bc_right, {'D':'2'}, 'diffusion')
 
+
+def analytical_solution(x,t,D,a,b):
+    return np.exp(-D * np.pi ** 2 * t / ((b - a) ** 2)) * np.sin(np.pi * (x - a) / (b - a))
+
+class TestDiffusionSimulation(unittest.TestCase):
+    def setUp(self):
+        """Setup a common simulation scenario for each test."""
+        self.a = 0
+        self.b = 1
+        self.D = 1.0
+        self.N = 50
+        self.dx = (self.b - self.a) / (self.N - 1)
+        self.initial_condition = lambda x: np.sin(np.pi * x)
+        self.boundary_conditions = [
+            BoundaryCondition('left', 'dirichlet', 0),
+            BoundaryCondition('right', 'dirichlet', 0)
+        ]
+        self.time_span = (0, 1)
+        self.source_term = lambda t, x, U: 0  # No source term for simplicity
+        self.method = 'explicit_euler'
+        dt_max = ((self.b-self.a)/self.N)**2/ (2 * self.D)
+        self.dt = 0.5*dt_max
+        self.simulation = DiffusionSimulation(
+            self.source_term, self.a, self.b, self.D, self.initial_condition,
+            self.boundary_conditions, self.N, self.time_span, self.method,self.dt
+        )
+
+    def test_diffusion_rhs(self):
+        """Test the calculation of the diffusion RHS."""
+        U = np.linspace(0, 1, self.N)
+        t = 0
+        rhs = self.simulation.diffusion_rhs(t, U)
+        expected_rhs = np.zeros_like(U)  # Since U is linear and boundary conditions are zero
+        np.testing.assert_allclose(rhs, expected_rhs, atol=1e-5)
+
+    def test_apply_boundary_conditions(self):
+        """Test boundary condition application."""
+        U = np.array([1, 2, 3, 4, 5])
+        self.simulation.apply_boundary_conditions(U)
+        self.assertEqual(U[0], 0)
+        self.assertEqual(U[-1], 0)
+
+    def test_explicit_euler_step(self):
+        """Test the explicit Euler step functionality."""
+        U = self.initial_condition(np.linspace(self.a, self.b, self.N))
+        t = 0
+        U_next = self.simulation.explicit_euler_step(t, U)
+        # Assuming a very small dt and simple diffusion, this should be close to initial U
+        np.testing.assert_allclose(U_next, U, atol=1e-1)
+
+    def test_steady_state_solution(self):
+        """Test the steady state solver against an expected result (if applicable)."""
+        x, U_steady = self.simulation.solve_steady_state()
+        # Assuming a test scenario where analytical solution is known:
+        analytical = np.zeros_like(x)  # for a trivial steady state case
+        np.testing.assert_allclose(U_steady, analytical, atol=1e-5)
+
+    def test_solver_methods(self):
+        """Test different solver methods to ensure they compute correctly against analytical solution defined above."""
+        methods = ['explicit_euler', 'implicit_dense', 'implicit_sparse','IMEX','implicit_root']
+        for method in methods:
+            sim = DiffusionSimulation(
+                self.source_term, self.a, self.b, self.D, self.initial_condition,
+                self.boundary_conditions, self.N, self.time_span, method,self.dt
+            )
+            x, t, U = sim.solve()
+            error_threshold = 0.1  # Define a suitable error threshold
+            for i, t in enumerate(np.arange(self.time_span[0], self.time_span[1], self.dt)):
+                u_exact = analytical_solution(np.linspace(self.a,self.b,self.N+1), t,self.D,self.a,self.b)
+                # Compute the error norm between the numerical and analytical solutions
+                error_norm = np.linalg.norm(U[i, :] - u_exact, ord=2)
+                self.assertLess(error_norm, error_threshold, f"Exceeded error threshold at t={t}")
+                
+            print(f'Method {method} passed test')
 
 
 unittest.main()
