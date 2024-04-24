@@ -30,6 +30,9 @@ This repository contains a suite of numerical methods designed to solve ordinary
 
 To use these methods, ensure you have Python installed along with necessary packages like `numpy`, `scipy`, and `logging`. Refer to the individual function docstrings for specific examples and parameter details.
 
+## Testing
+- Most of the testing is located in `tests.py`, other tests include `shooting_test.py` and `limit_cycle_comparison.py`
+  
 ## Contribution
 
 Contributions to improve the methods or extend the range of solvable equations are welcome. Please ensure to follow the existing coding and documentation standards.
