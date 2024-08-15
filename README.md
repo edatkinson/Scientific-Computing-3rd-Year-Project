@@ -37,3 +37,4 @@ To use these methods, ensure you have Python installed along with necessary pack
 
 Contributions to improve the methods or extend the range of solvable equations are welcome. Please ensure to follow the existing coding and documentation standards.
 
+Grade Acheived: 1st
